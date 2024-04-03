@@ -696,7 +696,7 @@ func New() *FunctionGenerator {
 			},
 			Args:   1,
 			IsPure: false,
-		}.SetDescription("value", "Returns the string representation of the value.")).
+		}.SetDescription("message", "Throws an error with the given message")).
 		AddStaticFunction("string", funcGen.Function[Value]{
 			Func: func(st funcGen.Stack[Value], cs []Value) (Value, error) {
 				s, err := st.Get(0).ToString(st)
