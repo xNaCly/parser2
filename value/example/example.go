@@ -32,8 +32,9 @@ func main() {
 		// Create a function that evaluates the list of persons.
 		// The argument 'persons' is passed to the function.
 		fu, err := parser.Generate(`
+func f(p) p.Name;
 
-persons.map(p->p.Name).reduce((a,b)->a+", "+b)
+persons.map(f).reduce((a,b)->a+", "+b)
 
         `, "persons")
 		if err != nil {

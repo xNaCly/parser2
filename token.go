@@ -316,32 +316,32 @@ func (t *Tokenizer) readSkip(valid func(c rune) bool, skipComment bool) string {
 
 func (t *Tokenizer) readStr() Token {
 	str := strings.Builder{}
-	for {
-		if c := t.next(false); c != '"' {
-			switch c {
-			case 0, '\n', '\r':
-				return Token{tInvalid, "EOL", t.getLine()}
+	c := t.next(false)
+	for c != '"' {
+		switch c {
+		case 0, '\n', '\r':
+			return Token{tInvalid, "EOL", t.getLine()}
+		case '\\':
+			i := t.next(false)
+			switch i {
+			case 'n':
+				str.WriteRune('\n')
+			case 'r':
+				str.WriteRune('\r')
+			case 't':
+				str.WriteRune('\t')
+			case '"':
+				str.WriteRune('"')
 			case '\\':
-				i := t.next(false)
-				switch i {
-				case 'n':
-					str.WriteRune('\n')
-				case 'r':
-					str.WriteRune('\r')
-				case 't':
-					str.WriteRune('\t')
-				case '"':
-					str.WriteRune('"')
-				case '\\':
-					str.WriteRune('\\')
-				default:
-					return Token{tInvalid, fmt.Sprintf("Escape %c", i), t.getLine()}
-				}
+				str.WriteRune('\\')
 			default:
-				str.WriteRune(c)
+				return Token{tInvalid, fmt.Sprintf("Escape %c", i), t.getLine()}
 			}
-		} else {
-			return Token{tString, str.String(), t.getLine()}
+		default:
+			str.WriteRune(c)
 		}
+
+		c = t.next(false)
 	}
+	return Token{tString, str.String(), t.getLine()}
 }

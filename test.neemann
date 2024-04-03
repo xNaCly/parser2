@@ -1,0 +1,7 @@
+// vim: syntax=javascript
+// let b = [{m: 1, b:3}];
+// let c = b.map(a -> let b = 1;b).eval();
+// let d = c.size();
+// let e = c.accept(a -> a > 1).size();
+// d+e
+list(1000).map(n -> n * 2).skip(100)
