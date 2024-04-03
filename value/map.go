@@ -442,6 +442,9 @@ func createMapMethods() MethodMap {
 		"accept": MethodAtType(1, func(m Map, stack funcGen.Stack[Value]) (Value, error) { return m.Accept(stack) }).
 			SetMethodDescription("func(key, value) bool",
 				"Accept takes a function as argument and returns a new map with all entries for which the function returns true."),
+		"filter": MethodAtType(1, func(m Map, stack funcGen.Stack[Value]) (Value, error) { return m.Accept(stack) }).
+			SetMethodDescription("func(key, value) bool",
+				"Accept takes a function as argument and returns a new map with all entries for which the function returns true."),
 		"map": MethodAtType(1, func(m Map, stack funcGen.Stack[Value]) (Value, error) { return m.Map(stack) }).
 			SetMethodDescription("func(key, value) value",
 				"Map takes a function as argument and returns a new map with the same keys and all values replaced by the function."),

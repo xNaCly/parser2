@@ -1446,6 +1446,9 @@ func createListMethods(
 		"accept": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Accept(stack) }).
 			SetMethodDescription("func(item) bool",
 				"Filters the list by the given function. If the function returns true, the item is accepted, otherwise it is skipped."),
+		"filter": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Accept(stack) }).
+			SetMethodDescription("func(item) bool",
+				"Filters the list by the given function. If the function returns true, the item is accepted, otherwise it is skipped."),
 		"map": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Map(stack) }).
 			SetMethodDescription("func(item) newItem",
 				"Maps the list by the given function. The function is called for each item in the list and the result is "+

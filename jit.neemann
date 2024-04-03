@@ -5,8 +5,8 @@
 /// toJIT should be compiled upon hitting 1000 calls 
 func toJIT(a,b) a*b; 
 
-list(999)
-    .map(a -> toJIT(a, 2))
+let s = list(999)
+    .map(a -> toJIT(a, 2));
 
 // this should be a lot faster than the above
 list(999)
