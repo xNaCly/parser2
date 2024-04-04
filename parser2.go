@@ -597,7 +597,7 @@ func simpleNumber(r rune) (func(r rune) bool, bool) {
 	if unicode.IsNumber(r) {
 		var last rune
 		return func(r rune) bool {
-			ok := unicode.IsNumber(r) || r == '.' || r == 'e' || (last == 'e' && r == '-') || (last == 'e' && r == '+')
+			ok := unicode.IsNumber(r) || r == '.' || r == 'e' || r == '_' || (last == 'e' && r == '-') || (last == 'e' && r == '+')
 			last = r
 			return ok
 		}, true
