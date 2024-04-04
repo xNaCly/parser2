@@ -1,17 +1,21 @@
 // vim: filetype=kotlin
 
-// Rudimentary jit example
+let example1 = [-2, -1, -1, 1, 2, 3];
+let example2 = [-3, -2, -1, 0, 0, 1, 2];
+let example3 = [5, 20, 66, 1314];
 
-/// toJIT should be compiled upon hitting 1000 calls 
-func toJIT(a,b) a*b; 
+func b(arr)
+    let size = arr.size();
+    if size > 0 then
+        trace(0);
+        size
+    else 
+        size;
 
-let s = list(999)
-    .map(a -> toJIT(a, 2));
 
-// this should be a lot faster than the above
-list(999)
-    .map(a -> toJIT(a, 2))
 
-// Fib example:
-
-// TODO:
+let s = list(500_000)
+    .map(t -> let o = { a: b(example1), b: b(example2), c: b(example3) }; o.a+o.b+o.c)
+    .map(t -> a(t))
+    .sum();
+s
