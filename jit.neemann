@@ -6,16 +6,15 @@ let example3 = [5, 20, 66, 1314];
 
 func b(arr)
     let size = arr.size();
-    if size > 0 then
-        trace(0);
-        size
-    else 
-        size;
+    let neg = arr.filter(e -> e > 0).size();
+    max(size, neg);
 
-
-
-let s = list(500_000)
-    .map(t -> let o = { a: b(example1), b: b(example2), c: b(example3) }; o.a+o.b+o.c)
-    .map(t -> a(t))
-    .sum();
+let s = list(1_000_000)
+    .map(e -> 
+        let a = b(example1);
+        let c = b(example2);
+        let d = b(example3);
+        0
+    ) 
+    .last();
 s
