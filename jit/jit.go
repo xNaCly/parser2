@@ -4,18 +4,54 @@
 package jit
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"os"
 	"runtime"
+	"strings"
+
+	"github.com/hneemann/parser2"
+	"github.com/hneemann/parser2/funcGen"
 )
 
-// Jit invokes the code generation, calls the go compiler, opens the compiled
-// plugin and returns the generated and compiled function
-func Jit() (func(), error) {
+// Jit invokes the code generation, traverses the abstract syntax tree, calls
+// the go compiler, opens the compiled plugin and returns the generated and
+// compiled function
+func Jit[V any](ast parser2.AST) (func(stack funcGen.Stack[V], closureStore []V) (V, error), error) {
 	if runtime.GOOS == "windows" {
-		return nil, errors.New(`
+		return nil, fmt.Errorf(`
 The go plugin api is not supported on windows, just in time compilation is therefore not available.
-See: https://pkg.go.dev/plugin#hdr-Warnings
-`)
+See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
-	return nil, nil
+
+	s := Stencil[float64, bool]{
+		Name:          "Returner",
+		ParameterName: "lol",
+	}
+
+	f, err := os.CreateTemp(".", "jit_*.go")
+	defer os.Remove(f.Name())
+	if err != nil {
+		return nil, err
+	}
+	err = generate(f, s)
+	if err != nil {
+		return nil, err
+	}
+
+	path, err := compile(f.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	return function[V](s.Name, path)
+}
+
+// compile invokes the go compiler to create a shared object / go plugin from
+// the go file at the specifed path
+func compile(path string) (soPath string, err error) {
+	soPath = strings.Replace(path, ".go", ".so", 1)
+	// TODO: compile go plugin
+	return
 }

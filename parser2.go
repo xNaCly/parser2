@@ -431,6 +431,7 @@ func (a *ListAccess) String() string {
 	return braceStr(a.List) + "[" + a.Index.String() + "]"
 }
 
+// INFO: ClosureLiteral
 type ClosureLiteral struct {
 	Names []string
 	Func  AST
@@ -560,6 +561,7 @@ func (n *Const[V]) String() string {
 	return fmt.Sprint(n.Value)
 }
 
+// INFO: FunctionCall
 type FunctionCall struct {
 	Func AST
 	Args []AST
