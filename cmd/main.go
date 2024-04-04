@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/hneemann/parser2/value"
@@ -16,6 +17,7 @@ func main() {
 
 	if len(os.Args) > 1 {
 		fileContent, err := os.ReadFile(os.Args[1])
+		start := time.Now()
 		f, err := parser.Generate(string(fileContent))
 		if err != nil {
 			log.Fatalln("Parser error:", err)
@@ -27,8 +29,7 @@ func main() {
 			log.Fatalln("Eval error:", err)
 			return
 		}
-
-		fmt.Println(result)
+		fmt.Println(result, time.Since(start))
 		return
 	}
 
