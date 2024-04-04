@@ -185,6 +185,8 @@ type Function[V any] struct {
 	IsPure bool
 	// Description is a description of the function
 	Description *FunctionDescription
+	// Counter stores the amount of calls made to the function
+	Counter int
 }
 
 func (f Function[V]) SetMethodDescription(descr ...string) Function[V] {
@@ -213,6 +215,7 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The stack [st] is used to pass the given argument [a] to the function.
 // The pushed value is removed after the function is called.
 func (f Function[V]) Eval(st Stack[V], a V) (V, error) {
+	f.Counter++
 	st.Push(a)
 	return f.Func(st.CreateFrame(1), nil)
 }
@@ -221,6 +224,7 @@ func (f Function[V]) Eval(st Stack[V], a V) (V, error) {
 // The stack [st] is used to pass the given arguments to the function.
 // The pushed values are removed after the function is called.
 func (f Function[V]) EvalSt(st Stack[V], a ...V) (V, error) {
+	f.Counter++
 	for _, e := range a {
 		st.Push(e)
 	}
