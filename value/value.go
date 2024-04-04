@@ -820,7 +820,16 @@ func New() *FunctionGenerator {
 		AddStaticFunction("tan", simpleOnlyFloatFunc("tan", func(x float64) float64 { return math.Tan(x) })).
 		AddStaticFunction("asin", simpleOnlyFloatFunc("asin", func(x float64) float64 { return math.Asin(x) })).
 		AddStaticFunction("acos", simpleOnlyFloatFunc("acos", func(x float64) float64 { return math.Acos(x) })).
-		AddStaticFunction("atan", simpleOnlyFloatFunc("atan", func(x float64) float64 { return math.Atan(x) }))
+		AddStaticFunction("atan", simpleOnlyFloatFunc("atan", func(x float64) float64 { return math.Atan(x) })).
+		AddStaticFunction("trace", funcGen.Function[Value]{
+			Func: func(st funcGen.Stack[Value], cs []Value) (Value, error) {
+				v := st.Get(0)
+				fmt.Printf("%v\n", v)
+				return Bool(true), nil
+			},
+			Args:   1,
+			IsPure: false,
+		}.SetDescription("a", "Prints a to os.Stdout"))
 
 	f.FunctionGenerator = fg
 
