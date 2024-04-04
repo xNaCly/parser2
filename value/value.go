@@ -824,7 +824,7 @@ func New() *FunctionGenerator {
 		AddStaticFunction("trace", funcGen.Function[Value]{
 			Func: func(st funcGen.Stack[Value], cs []Value) (Value, error) {
 				v := st.Get(0)
-				fmt.Printf("%v\n", v)
+				fmt.Printf("%v [%T]\n", v, v)
 				return Bool(true), nil
 			},
 			Args:   1,
