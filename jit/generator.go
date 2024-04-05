@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"text/template"
+
+	"github.com/hneemann/parser2"
 )
 
 // Stencil represents a singular function taking an argument of type
@@ -32,7 +34,7 @@ func {{.Name}}({{.ParameterName}} {{.ParameterTypeString}}) ({{.ReturnTypeString
 
 var tmpl = template.Must(template.New("stencil").Parse(stencil))
 
-func generate[ArgumentType any, ReturnType any](w io.Writer, s Stencil[ArgumentType, ReturnType]) error {
+func generate[ArgumentType any, ReturnType any](w io.Writer, s Stencil[ArgumentType, ReturnType], ast parser2.AST) error {
 	if s.ParameterTypeString == "" || s.ReturnTypeString == "" {
 		types := strings.Split(fmt.Sprintf("%T;%T", s.Parameter, s.Return), ";")
 		s.ParameterTypeString = types[0]

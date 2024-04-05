@@ -4,10 +4,10 @@
 package jit
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 
@@ -35,7 +35,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	if err != nil {
 		return nil, err
 	}
-	err = generate(f, s)
+	err = generate(f, s, ast)
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +44,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(path)
 
 	return function[V](s.Name, path)
 }
@@ -52,6 +53,6 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 // the go file at the specifed path
 func compile(path string) (soPath string, err error) {
 	soPath = strings.Replace(path, ".go", ".so", 1)
-	// TODO: compile go plugin
-	return
+	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", soPath, path)
+	return soPath, cmd.Run()
 }
