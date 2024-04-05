@@ -9,17 +9,15 @@ import (
 
 func TestJIT(t *testing.T) {
 	type Test[V comparable] struct {
-		input  string
-		output V
+		input      string
+		inputValue value.Value
+		output     value.Value
 	}
 	tests := []Test[bool]{
 		{
-			input:  "true",
-			output: true,
-		},
-		{
-			input:  "let a = true; a",
-			output: true,
+			input:      "func a(arg) arg;a(true)",
+			inputValue: value.Bool(true),
+			output:     value.Bool(true),
 		},
 	}
 	parser := value.New()
@@ -27,11 +25,11 @@ func TestJIT(t *testing.T) {
 		t.Run(test.input, func(t *testing.T) {
 			ast, err := parser.CreateAst(test.input)
 			assert.NoError(t, err)
-			_, err = Jit[bool](ast)
+			f, err := Jit(ast)
 			assert.NoError(t, err)
-			// out, err := f(funcGen.Stack[bool]{}, nil)
-			// assert.NoError(t, err)
-			// assert.Equal(t, test.output, out)
+			out, err := f(test.inputValue)
+			assert.NoError(t, err)
+			assert.Equal(t, test.output, out)
 		})
 	}
 }
