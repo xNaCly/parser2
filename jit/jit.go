@@ -8,25 +8,31 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"plugin"
 	"runtime"
 	"strings"
 
 	"github.com/hneemann/parser2"
 )
 
-// Jit invokes the code generation, traverses the abstract syntax tree, calls
+type Jit[V any] struct{}
+
+// TODO: this should probably use a context to time out after 2 seconds?
+
+// Invokes the code generation, traverses the abstract syntax tree, calls
 // the go compiler, opens the compiled plugin and returns the generated and
 // compiled function
-func Jit(ast parser2.AST) (Function, error) {
+func (j *Jit[V]) Compile(ast parser2.AST) (func(V) (V, error), error) {
 	if runtime.GOOS == "windows" {
 		return nil, fmt.Errorf(`
 The go plugin api is not supported on windows, just in time compilation is therefore not available.
 See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 
+	// TODO: replace this with name and param name lookup
 	s := Stencil{
-		Name:          "Cos",
-		ParameterName: "n",
+		Name:          "JIT",
+		ParameterName: "temp",
 	}
 
 	f, err := os.CreateTemp(".", "jit_*.go")
@@ -45,7 +51,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 	defer os.Remove(path)
 
-	return function(s.Name, path)
+	return function[V](s.Name, path)
 }
 
 // compile invokes the go compiler to create a shared object / go plugin from
@@ -57,4 +63,33 @@ func compile(path string) (soPath string, err error) {
 	cmd.Stdout = os.Stdout
 	err = cmd.Run()
 	return
+}
+
+// function extracts and returns the function with the given name from the
+// shared object / go plugin at the given path
+func function[V any](name string, path string) (func(V) (V, error), error) {
+	p, err := plugin.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	symbol, err := p.Lookup(name)
+	if err != nil {
+		return nil, err
+	}
+
+	funct, ok := symbol.(func(any) (any, error))
+	if !ok {
+		var e func(any) (any, error)
+		return nil, fmt.Errorf("Failed to cast symbol of type %T to %T", symbol, e)
+	}
+
+	return func(v V) (V, error) {
+		var e V
+		out, err := funct(v)
+		if err != nil {
+			return e, err
+		}
+
+		return out.(V), nil
+	}, nil
 }

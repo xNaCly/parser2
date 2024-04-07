@@ -3,14 +3,20 @@ package funcGen
 import (
 	"bytes"
 	"fmt"
-	"github.com/hneemann/parser2"
-	"github.com/hneemann/parser2/listMap"
 	"log"
 	"reflect"
 	"sort"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/hneemann/parser2"
+	"github.com/hneemann/parser2/jit"
+	"github.com/hneemann/parser2/listMap"
 )
+
+// JIT_CONSTANT sets the threshold which the function call meta tracing has to
+// pass to be compiled
+var JIT_CONSTANT int = 1000
 
 type stackStorage[V any] struct {
 	data []V
@@ -173,6 +179,8 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 	appendWord()
 }
 
+// INFO: Function
+
 // Function represents a function
 type Function[V any] struct {
 	// Func is the function itself
@@ -187,6 +195,13 @@ type Function[V any] struct {
 	Description *FunctionDescription
 	// Counter stores the amount of calls made to the function
 	Counter int
+	// Ast stores the abstract syntax tree, used for jit compilation of the given function
+	Ast parser2.AST
+	// JitCompiler holds the compiler the function invokes once the
+	// JIT_CONSTANT threshold is reached
+	JitCompiler *jit.Jit[V]
+	// wasJit is true if the function was jit compiled
+	wasJit bool
 }
 
 func (f Function[V]) SetMethodDescription(descr ...string) Function[V] {
@@ -214,7 +229,19 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // Eval is used to evaluate a function with one argument
 // The stack [st] is used to pass the given argument [a] to the function.
 // The pushed value is removed after the function is called.
-func (f Function[V]) Eval(st Stack[V], a V) (V, error) {
+func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
+	if !f.wasJit && (f.Counter > JIT_CONSTANT || f.JitCompiler != nil) {
+		out, err := f.JitCompiler.Compile(f.Ast)
+		if err != nil {
+			var e V
+			fmt.Println("Failed to compile", err)
+			return e, err
+		}
+		f.Func = func(stack Stack[V], closureStore []V) (V, error) {
+			return out(stack.Get(0))
+		}
+		f.wasJit = true
+	}
 	f.Counter++
 	st.Push(a)
 	return f.Func(st.CreateFrame(1), nil)
@@ -224,7 +251,7 @@ func (f Function[V]) Eval(st Stack[V], a V) (V, error) {
 // The stack [st] is used to pass the given arguments to the function.
 // The pushed values are removed after the function is called.
 func (f Function[V]) EvalSt(st Stack[V], a ...V) (V, error) {
-	f.Counter++
+	// TODO: hit compilation
 	for _, e := range a {
 		st.Push(e)
 	}
@@ -631,6 +658,7 @@ func (g *FunctionGenerator[V]) CreateAst(exp string) (parser2.AST, error) {
 
 func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext) (ParserFunc[V], error) {
 	var zero V
+	var sharedJIT = jit.Jit[V]{}
 	if g.customGenerator != nil {
 		c, err := g.customGenerator.GenerateCustom(ast, gc, g)
 		if err != nil {
@@ -858,6 +886,7 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			}
 		}
 		usedVars := g.checkIfClosure(a.Func, funcArgs)
+		// INFO: compiling closures
 		if len(usedVars) == 0 {
 			// not a closure, just a function
 			closureFunc, err := g.GenerateFunc(a.Func, GeneratorContext{am: funcArgs})
@@ -866,8 +895,11 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			}
 			return func(st Stack[V], cs []V) (V, error) {
 				return g.closureHandler.FromClosure(Function[V]{
-					Func: closureFunc,
-					Args: len(a.Names),
+					Func:        closureFunc,
+					Args:        len(a.Names),
+					Ast:         a.Func,
+					JitCompiler: &sharedJIT,
+					Counter:     0,
 				}), nil
 			}, nil
 		} else {
@@ -1093,7 +1125,9 @@ func (g *FunctionGenerator[V]) createClosureLiteralFunc(a *parser2.ClosureLitera
 			Func: func(st Stack[V], cs []V) (V, error) {
 				return closureFunc(st, closureContext)
 			},
-			Args: len(a.Names),
+			Args:    len(a.Names),
+			Ast:     a.Func,
+			Counter: 0,
 		})
 		for i, accessContext := range accessContextOperations {
 			closureContext[i] = accessContext(st, cs, closure)

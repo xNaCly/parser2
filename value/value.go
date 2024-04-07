@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/hneemann/iterator"
-	"github.com/hneemann/parser2"
-	"github.com/hneemann/parser2/funcGen"
-	"github.com/hneemann/parser2/listMap"
 	"math"
 	"math/rand"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/hneemann/iterator"
+	"github.com/hneemann/parser2"
+	"github.com/hneemann/parser2/funcGen"
+	"github.com/hneemann/parser2/listMap"
 )
 
 type Type int
@@ -824,7 +826,7 @@ func New() *FunctionGenerator {
 		AddStaticFunction("trace", funcGen.Function[Value]{
 			Func: func(st funcGen.Stack[Value], cs []Value) (Value, error) {
 				v := st.Get(0)
-				fmt.Printf("%v [%T]\n", v, v)
+				fmt.Printf("%q %v [%T]\n", time.Now().Format(time.StampNano), v, v)
 				return Bool(true), nil
 			},
 			Args:   1,

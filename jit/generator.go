@@ -14,15 +14,16 @@ type Stencil struct {
 
 // stencil is required due to the fact that the go compiler requires each and
 // every type to be defined at compile time
+//
+// - Type is a stripped down enum taken from value.Value containing the relevant subset of types
+//
+// - Value is the stripped down interface taken from value.Value containing the
+// subset of functions the jit will use at this time
 var stencil = `
 package main
 
-import (
-	"github.com/hneemann/parser2/value"
-)
-
-func {{.Name}}({{.ParameterName}} value.Value) (value.Value, error) {
-    return value.Bool(true), nil
+func {{.Name}}({{.ParameterName}} any) (any, error) {
+    return {{.ParameterName}}, nil
 }
 `
 
