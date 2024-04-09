@@ -14,6 +14,8 @@ import (
 	"github.com/hneemann/parser2/listMap"
 )
 
+// TODO: JIT_CONSTANT needs benchmarking for optimal threshold
+
 // JIT_CONSTANT sets the threshold which the function call meta tracing has to
 // pass to be compiled
 var JIT_CONSTANT int = 1000
@@ -200,6 +202,8 @@ type Function[V any] struct {
 	// JitCompiler holds the compiler the function invokes once the
 	// JIT_CONSTANT threshold is reached
 	JitCompiler *jit.Jit[V]
+	// ArgumentNames contains the list of parameter names of the function
+	ArgumentNames []string
 	// wasJit is true if the function was jit compiled
 	wasJit bool
 }
@@ -231,7 +235,9 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 	if !f.wasJit && (f.Counter > JIT_CONSTANT || f.JitCompiler != nil) {
-		out, err := f.JitCompiler.Compile(f.Ast)
+		fmt.Println("[JIT] Reached", JIT_CONSTANT, "calls to function [", &f, "] attemping compilation")
+		fmt.Println(f.ArgumentNames)
+		out, err := f.JitCompiler.Compile(f.Ast, f.ArgumentNames)
 		if err != nil {
 			var e V
 			fmt.Println("Failed to compile", err)
@@ -658,6 +664,7 @@ func (g *FunctionGenerator[V]) CreateAst(exp string) (parser2.AST, error) {
 
 func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext) (ParserFunc[V], error) {
 	var zero V
+	// TODO: move this to *g
 	var sharedJIT = jit.Jit[V]{}
 	if g.customGenerator != nil {
 		c, err := g.customGenerator.GenerateCustom(ast, gc, g)
@@ -893,13 +900,19 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			if err != nil {
 				return nil, err
 			}
+			args := make([]string, 0, len(a.Names))
+			for k := range funcArgs {
+				args = append(args, k)
+			}
 			return func(st Stack[V], cs []V) (V, error) {
+				fmt.Println(args)
 				return g.closureHandler.FromClosure(Function[V]{
-					Func:        closureFunc,
-					Args:        len(a.Names),
-					Ast:         a.Func,
-					JitCompiler: &sharedJIT,
-					Counter:     0,
+					Func:          closureFunc,
+					ArgumentNames: args,
+					Args:          len(a.Names),
+					Ast:           a.Func,
+					JitCompiler:   &sharedJIT,
+					Counter:       0,
 				}), nil
 			}, nil
 		} else {

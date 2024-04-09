@@ -15,6 +15,8 @@ import (
 	"github.com/hneemann/parser2"
 )
 
+// Jit works by assuming perfect code and state, if the compilation failes due
+// to a compilation error the Jit bails out of execution
 type Jit[V any] struct{}
 
 // TODO: this should probably use a context to time out after 2 seconds?
@@ -22,17 +24,17 @@ type Jit[V any] struct{}
 // Invokes the code generation, traverses the abstract syntax tree, calls
 // the go compiler, opens the compiled plugin and returns the generated and
 // compiled function
-func (j *Jit[V]) Compile(ast parser2.AST) (func(V) (V, error), error) {
+func (j *Jit[V]) Compile(ast parser2.AST, params []string) (func(V) (V, error), error) {
 	if runtime.GOOS == "windows" {
 		return nil, fmt.Errorf(`
 The go plugin api is not supported on windows, just in time compilation is therefore not available.
 See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 
-	// TODO: replace this with name and param name lookup
+	// TODO: replace this with name lookup
 	s := Stencil{
-		Name:          "JIT",
-		ParameterName: "temp",
+		Name:           "Jit",
+		ParameterNames: params,
 	}
 
 	f, err := os.CreateTemp(".", "jit_*.go")
@@ -59,6 +61,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 func compile(path string) (soPath string, err error) {
 	soPath = strings.Replace(path, ".go", ".so", 1)
 	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", soPath, path)
+	// TODO: return stderr and stdout in form of an error
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	err = cmd.Run()
