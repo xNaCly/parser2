@@ -15,7 +15,7 @@ type Stencil struct {
 
 func generate[V any](w io.Writer, s Stencil, ast parser2.AST) error {
 	buf := bytes.Buffer{}
-	buf.WriteString("package main\nfunc ")
+	buf.WriteString("package main;func ")
 	buf.WriteString(s.Name)
 	buf.WriteRune('(')
 	for i, arg := range s.ParameterNames {
@@ -32,7 +32,7 @@ func generate[V any](w io.Writer, s Stencil, ast parser2.AST) error {
 		return err
 	}
 	buf.WriteString("}")
-	fmt.Println("[JIT] output: ", buf.String())
+	fmt.Println("[JIT] output:", buf.String())
 	_, err = buf.WriteTo(w)
 	return err
 }
