@@ -6,6 +6,7 @@ package jit
 import (
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"plugin"
@@ -19,6 +20,18 @@ import (
 // to a compilation error the Jit bails out of execution
 type Jit[V any] struct{}
 
+const id_length = 15
+
+var set = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+
+func id() string {
+	r := make([]byte, id_length)
+	for i := 0; i < id_length; i++ {
+		r[i] = set[rand.IntN(len(set))]
+	}
+	return string(r)
+}
+
 // TODO: this should probably use a context to time out after 2 seconds?
 
 // Invokes the code generation, traverses the abstract syntax tree, calls
@@ -31,23 +44,23 @@ The go plugin api is not supported on windows, just in time compilation is there
 See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 
-	// TODO: replace this with name lookup
-	s := Stencil{
-		Name:           "Jit",
-		ParameterNames: params,
-	}
-
-	f, err := os.CreateTemp(".", "jit_*.go")
+	name := "Jit_" + id()
+	f, err := os.Create(name + ".go")
 	defer os.Remove(f.Name())
 	if err != nil {
 		return nil, err
 	}
-	err = generate(f, s, ast)
+
+	s := Stencil{
+		Name:           name,
+		ParameterNames: params,
+	}
+	err = generate[V](f, s, ast)
 	if err != nil {
 		return nil, err
 	}
 
-	path, err := compile(f.Name())
+	path, err := compile(name + ".go")
 	if err != nil {
 		return nil, err
 	}
