@@ -1,34 +1,66 @@
 package jit
 
 import (
+	"bytes"
+	"fmt"
 	"io"
-	"text/template"
 
 	"github.com/hneemann/parser2"
 )
 
 type Stencil struct {
-	Name          string
-	ParameterName string
+	Name           string
+	ParameterNames []string
 }
 
-// stencil is required due to the fact that the go compiler requires each and
-// every type to be defined at compile time
-//
-// - Type is a stripped down enum taken from value.Value containing the relevant subset of types
-//
-// - Value is the stripped down interface taken from value.Value containing the
-// subset of functions the jit will use at this time
-var stencil = `
-package main
-
-func {{.Name}}({{.ParameterName}} any) (any, error) {
-    return {{.ParameterName}}, nil
+func generate[V any](w io.Writer, s Stencil, ast parser2.AST) error {
+	buf := bytes.Buffer{}
+	buf.WriteString("package main\nfunc ")
+	buf.WriteString(s.Name)
+	buf.WriteRune('(')
+	for i, arg := range s.ParameterNames {
+		buf.WriteString(arg)
+		buf.WriteString(" any")
+		if i+1 != len(s.ParameterNames) {
+			buf.WriteRune(',')
+		}
+	}
+	buf.WriteString(") any {")
+	buf.WriteString("return ")
+	err := codegen[V](&buf, ast)
+	if err != nil {
+		return err
+	}
+	buf.WriteString("}")
+	fmt.Println("[JIT] output: ", buf.String())
+	_, err = buf.WriteTo(w)
+	return err
 }
-`
 
-var tmpl = template.Must(template.New("stencil").Parse(stencil))
-
-func generate(w io.Writer, s Stencil, ast parser2.AST) error {
-	return tmpl.Execute(w, s)
+func codegen[V any](b *bytes.Buffer, ast parser2.AST) error {
+	switch t := ast.(type) {
+	case *parser2.Const[V]:
+		b.WriteString(t.String())
+	case *parser2.Ident:
+		b.WriteString(t.Name)
+	case *parser2.Operate:
+		err := codegen[V](b, t.A)
+		if err != nil {
+			return err
+		}
+		b.WriteString(t.Operator)
+		err = codegen[V](b, t.B)
+		if err != nil {
+			return err
+		}
+	case *parser2.Unary:
+		b.WriteString(t.Operator)
+		err := codegen[V](b, t.Value)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("Codegen: Expression %T not yet supported by jit: %q", t, t.String())
+	}
+	return nil
 }

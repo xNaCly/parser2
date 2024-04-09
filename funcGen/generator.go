@@ -14,6 +14,8 @@ import (
 	"github.com/hneemann/parser2/listMap"
 )
 
+// TODO: JIT_CONSTANT needs benchmarking for optimal threshold
+
 // JIT_CONSTANT sets the threshold which the function call meta tracing has to
 // pass to be compiled
 var JIT_CONSTANT int = 1000
@@ -183,7 +185,7 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 
 // Function represents a function
 type Function[V any] struct {
-	// Func is the function itself
+	// Func is the function itself, gets overridden by the jit compiler
 	Func ParserFunc[V]
 	// Args gives the number of arguments required. It is used for checking
 	// the number of arguments in the call. The value -1 means any number of
@@ -200,6 +202,8 @@ type Function[V any] struct {
 	// JitCompiler holds the compiler the function invokes once the
 	// JIT_CONSTANT threshold is reached
 	JitCompiler *jit.Jit[V]
+	// ArgumentNames contains the list of parameter names of the function
+	ArgumentNames []string
 	// wasJit is true if the function was jit compiled
 	wasJit bool
 }
@@ -230,18 +234,19 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The stack [st] is used to pass the given argument [a] to the function.
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
-	if !f.wasJit && (f.Counter > JIT_CONSTANT || f.JitCompiler != nil) {
-		out, err := f.JitCompiler.Compile(f.Ast)
+	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
+		fmt.Printf("[JIT] Reached %d calls to function 0x%x, attemping compilation\n", JIT_CONSTANT, &f)
+		out, err := f.JitCompiler.Compile(f.Ast, f.ArgumentNames)
+		f.wasJit = true
 		if err != nil {
-			var e V
-			fmt.Println("Failed to compile", err)
-			return e, err
+			fmt.Printf("[JIT] Failed to compile function 0x%x with args %v, bailing out to interpreter...\n[JIT] Error: %s\n", &f, f.ArgumentNames, err)
+			goto bailout
 		}
 		f.Func = func(stack Stack[V], closureStore []V) (V, error) {
 			return out(stack.Get(0))
 		}
-		f.wasJit = true
 	}
+bailout: // used to bail out if the compilation failed
 	f.Counter++
 	st.Push(a)
 	return f.Func(st.CreateFrame(1), nil)
@@ -255,6 +260,7 @@ func (f Function[V]) EvalSt(st Stack[V], a ...V) (V, error) {
 	for _, e := range a {
 		st.Push(e)
 	}
+	f.Counter++
 	return f.Func(st.CreateFrame(len(a)), nil)
 }
 
@@ -658,7 +664,6 @@ func (g *FunctionGenerator[V]) CreateAst(exp string) (parser2.AST, error) {
 
 func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext) (ParserFunc[V], error) {
 	var zero V
-	var sharedJIT = jit.Jit[V]{}
 	if g.customGenerator != nil {
 		c, err := g.customGenerator.GenerateCustom(ast, gc, g)
 		if err != nil {
@@ -893,13 +898,18 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			if err != nil {
 				return nil, err
 			}
+			args := make([]string, 0, len(a.Names))
+			for k := range funcArgs {
+				args = append(args, k)
+			}
 			return func(st Stack[V], cs []V) (V, error) {
 				return g.closureHandler.FromClosure(Function[V]{
-					Func:        closureFunc,
-					Args:        len(a.Names),
-					Ast:         a.Func,
-					JitCompiler: &sharedJIT,
-					Counter:     0,
+					Func:          closureFunc,
+					ArgumentNames: args,
+					Args:          len(a.Names),
+					Ast:           a.Func,
+					JitCompiler:   &jit.Jit[V]{},
+					Counter:       0,
 				}), nil
 			}, nil
 		} else {
@@ -1125,9 +1135,11 @@ func (g *FunctionGenerator[V]) createClosureLiteralFunc(a *parser2.ClosureLitera
 			Func: func(st Stack[V], cs []V) (V, error) {
 				return closureFunc(st, closureContext)
 			},
-			Args:    len(a.Names),
-			Ast:     a.Func,
-			Counter: 0,
+			Args:          len(a.Names),
+			ArgumentNames: a.Names,
+			Ast:           a.Func,
+			JitCompiler:   &jit.Jit[V]{},
+			Counter:       0,
 		})
 		for i, accessContext := range accessContextOperations {
 			closureContext[i] = accessContext(st, cs, closure)
