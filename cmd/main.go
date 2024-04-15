@@ -14,7 +14,6 @@ import (
 
 func main() {
 	parser := value.New()
-	parser.SetOptimizer(nil)
 	parser.GetParser().AllowComments()
 	jitEnabled := flag.Bool("jit", false, "enable/disable the just in time compiler")
 	flag.Parse()
