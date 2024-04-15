@@ -1,12 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/hneemann/parser2/jit"
 	"github.com/hneemann/parser2/value"
 )
 
@@ -14,6 +16,11 @@ func main() {
 	parser := value.New()
 	parser.SetOptimizer(nil)
 	parser.GetParser().AllowComments()
+	jitEnabled := flag.Bool("jit", false, "enable/disable the just in time compiler")
+	flag.Parse()
+	if *jitEnabled {
+		parser.SetJit(&jit.Jit[value.Value]{})
+	}
 
 	if len(os.Args) > 1 {
 		fileContent, err := os.ReadFile(os.Args[1])
@@ -23,13 +30,14 @@ func main() {
 			log.Fatalln("Parser error:", err)
 			return
 		}
+		log.Println("Generated")
 
 		result, err := f.Eval()
 		if err != nil {
 			log.Fatalln("Eval error:", err)
 			return
 		}
-		fmt.Println(result, time.Since(start))
+		log.Println(result, time.Since(start))
 		return
 	}
 
@@ -53,13 +61,13 @@ func main() {
 
 		f, err := parser.Generate(input)
 		if err != nil {
-			fmt.Println("Error:", err)
+			log.Println("Error:", err)
 			continue
 		}
 
 		result, err := f.Eval()
 		if err != nil {
-			fmt.Println("Error:", err)
+			log.Println("Error:", err)
 			continue
 		}
 
