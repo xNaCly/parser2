@@ -1,3 +1,22 @@
 // vim: syntax=javascript
-// jit testing, jit kicks in at around 1k iterations
-list(16_000_000).map(l -> l+1).sum()
+// let b = [{m: 1, b:3}];
+// let c = b.map(a -> let b = 1;b).eval();
+// let d = c.size();
+// let e = c.filter(a -> a > 1).size();
+// d+e
+let a = 2.2;
+func mapSlow(n)
+    let a = 1.2/n;
+    let b = n*n;
+    let c = a + b + n;
+    let d = c - 0.01;
+    let e = d*d;
+    let z = e.string();
+    let x = list(2000).map(n -> n*n).eval();
+    let y = nil;
+    ln(e) / (d * 0.5) / atan(d);
+
+let b = list(100000).map(n -> mapSlow(n)).filter(a -> a > 0).skip(100).eval();
+let m = b.mean();
+let s = b.sum();
+m + s
