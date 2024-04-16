@@ -432,6 +432,7 @@ func (a *ListAccess) String() string {
 }
 
 type ClosureLiteral struct {
+	Name  string
 	Names []string
 	Func  AST
 	Line
@@ -893,6 +894,7 @@ func (p *Parser[V]) parseLet(tokenizer *Tokenizer, constants Constants[V]) (AST,
 			return &Let{
 				Name: name,
 				Value: &ClosureLiteral{
+					Name:  name,
 					Names: names,
 					Func:  exp,
 					Line:  line,

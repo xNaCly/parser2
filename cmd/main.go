@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
-	"github.com/hneemann/parser2/jit"
 	"github.com/hneemann/parser2/value"
 )
 
@@ -19,18 +18,17 @@ func main() {
 	jitEnabled := flag.Bool("jit", false, "enable/disable the just in time compiler")
 	flag.Parse()
 	if *jitEnabled {
-		parser.SetJit(&jit.Jit[value.Value]{})
+		parser.SetJit()
 	}
 
-	if len(os.Args) > 1 {
-		fileContent, err := os.ReadFile(os.Args[1])
+	if len(flag.Args()) >= 1 {
+		fileContent, err := os.ReadFile(flag.Arg(0))
 		start := time.Now()
 		f, err := parser.Generate(string(fileContent))
 		if err != nil {
 			log.Fatalln("Parser error:", err)
 			return
 		}
-		log.Println("Generated")
 
 		result, err := f.Eval()
 		if err != nil {

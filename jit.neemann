@@ -9,12 +9,7 @@ func b(arr)
     let neg = arr.filter(e -> e > 0).size();
     max(size, neg);
 
-let s = list(100_000)
-    .map(e -> 
-        let a = b(example1);
-        let c = b(example2);
-        let d = b(example3);
-        0
-    ) 
+let s = list(10_000_000)
+    .map(e -> e) 
     .last();
 s
