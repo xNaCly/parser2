@@ -241,7 +241,7 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
 		f.wasJit = true
-		f.JitCompiler.Buffer = append(f.JitCompiler.Buffer, f)
+		f.JitCompiler.Queue = append(f.JitCompiler.Queue, f)
 	}
 
 	if f.wasJit && f.JitFunc != nil {
@@ -375,7 +375,7 @@ func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g.jit = &Jit[V]{
-		Buffer: make([]*Function[V], 0),
+		Queue:  make([]*Function[V], 0),
 		ctx:    ctx,
 		cancel: cancel,
 	}

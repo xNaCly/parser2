@@ -31,8 +31,8 @@ import (
 //
 // - the paper documenting the research on this jit: https://github.com/xNaCly/treewalk-vs-jit-with-go-plugins
 type Jit[V any] struct {
-	// Buffer accepts Function pointers the jit compiler should compile in the future
-	Buffer []*Function[V]
+	// Queue accepts Function pointers the jit compiler should compile in the future
+	Queue  []*Function[V]
 	ctx    context.Context
 	cancel context.CancelFunc
 	// counter is used for compiling closures and keeping track of them in shared objects
@@ -56,7 +56,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 	b := bytes.Buffer{}
 	b.WriteString("package main;")
-	for _, fun := range j.Buffer {
+	for _, fun := range j.Queue {
 		// logic for naming closures
 		if len(fun.Name) == 0 {
 			fun.Name = string([]byte{'c', byte(j.counter + '0')})
@@ -79,9 +79,9 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	defer os.Remove(path)
-	for i, fun := range j.Buffer {
-		j.Buffer[i] = j.Buffer[len(j.Buffer)-1]
-		j.Buffer = j.Buffer[:len(j.Buffer)-1]
+	for i, fun := range j.Queue {
+		j.Queue[i] = j.Queue[len(j.Queue)-1]
+		j.Queue = j.Queue[:len(j.Queue)-1]
 		funct, err := function[V]("JIT_"+fun.Name, path)
 		if err != nil {
 			fmt.Printf("[JIT] failed to compile %s: %s\n", fun.Name, err)
