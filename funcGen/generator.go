@@ -184,7 +184,7 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 
 // INFO: Function
 
-// Function represents a function
+// Function represents a function in the interpreter runtime
 type Function[V any] struct {
 	// Func is the function itself
 	Func ParserFunc[V]
