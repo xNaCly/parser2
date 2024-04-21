@@ -1,16 +1,52 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"path"
 	"time"
 )
 
+const DataBaseDir = "data/"
 const ImdbFilePath = "title.basics.tsv.gz"
+const ImdbDownloadUrl = "https://datasets.imdbws.com/title.basics.tsv.gz"
+
+func downloadDataset(fileName string, downloadUrl string) string {
+	filePath := path.Join(DataBaseDir, fileName)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("Downloading", fileName, "from", downloadUrl)
+		resp, err := http.Get(downloadUrl)
+		if err != nil {
+			log.Fatalln("Failed to download dataset:", err)
+		}
+
+		defer resp.Body.Close()
+
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+
+		out, err := os.Create(filePath)
+		if err != nil {
+			log.Fatalln("Failed to create file:", err)
+		}
+
+		defer out.Close()
+
+		_, err = io.Copy(out, buf)
+		if err != nil {
+			log.Fatalln("Failed to write file:", err)
+		}
+	}
+
+	return filePath
+}
 
 type ImdbTitle struct {
 	Tconst         string
@@ -33,7 +69,8 @@ func ImdbTitleFromCsvRecord(rec []string) ImdbTitle {
 }
 
 func loadImdbData() ([]ImdbTitle, error) {
-	file, err := os.Open(ImdbFilePath)
+	filePath := downloadDataset(ImdbFilePath, ImdbDownloadUrl)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
