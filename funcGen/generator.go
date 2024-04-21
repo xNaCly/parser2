@@ -2,15 +2,16 @@ package funcGen
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"reflect"
 	"sort"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/hneemann/parser2"
-	"github.com/hneemann/parser2/jit"
 	"github.com/hneemann/parser2/listMap"
 )
 
@@ -183,7 +184,7 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 
 // INFO: Function
 
-// Function represents a function
+// Function represents a function in the interpreter runtime
 type Function[V any] struct {
 	// Func is the function itself
 	Func ParserFunc[V]
@@ -203,9 +204,11 @@ type Function[V any] struct {
 	Ast parser2.AST
 	// JitCompiler holds the compiler the function invokes once the
 	// JIT_CONSTANT threshold is reached
-	JitCompiler *jit.Jit[V]
+	JitCompiler *Jit[V]
 	// ArgumentNames contains the list of parameter names of the function
 	ArgumentNames []string
+	// Name holds the name of the function
+	Name string
 	// wasJit is true if the function was jit compiled
 	wasJit bool
 }
@@ -237,21 +240,11 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
-		go func() {
-			fmt.Printf("[JIT] Reached %d calls to function 0x%x, attemping compilation\n", JIT_CONSTANT, &f)
-			out, err := f.JitCompiler.Compile(f.Ast, f.ArgumentNames)
-			f.wasJit = true
-			if err != nil {
-				fmt.Printf("[JIT] Failed to compile function 0x%x with args %v, bailing out to interpreter...\n[JIT] Error: %s\n", &f, f.ArgumentNames, err)
-				return
-			}
-			f.JitFunc = func(stack Stack[V], closureStore []V) (V, error) {
-				return out(stack.Get(0))
-			}
-		}()
+		f.wasJit = true
+		f.JitCompiler.Queue = append(f.JitCompiler.Queue, f)
 	}
 
-	if f.wasJit {
+	if f.wasJit && f.JitFunc != nil {
 		st.Push(a)
 		return f.JitFunc(st.CreateFrame(1), nil)
 	}
@@ -340,7 +333,7 @@ func (c constMap[V]) GetConst(name string) (V, bool) {
 type FunctionGenerator[V any] struct {
 	parser          *parser2.Parser[V]
 	operators       []Operator[V]
-	jit             *jit.Jit[V]
+	jit             *Jit[V]
 	unary           []UnaryOperator[V]
 	numberParser    parser2.NumberParser[V]
 	stringHandler   parser2.StringConverter[V]
@@ -378,8 +371,20 @@ func (g *FunctionGenerator[V]) SetNumberParser(numberParser parser2.NumberParser
 	return g
 }
 
-func (g *FunctionGenerator[V]) SetJit(j *jit.Jit[V]) *FunctionGenerator[V] {
-	g.jit = j
+func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	g.jit = &Jit[V]{
+		Queue:  make([]*Function[V], 0),
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	go func() {
+		time.Sleep(time.Millisecond * 20)
+		if err := g.jit.Compile(); err != nil {
+			fmt.Println("[JIT] compilation failed", err)
+		}
+	}()
 	return g
 }
 
@@ -919,10 +924,11 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			}
 			return func(st Stack[V], cs []V) (V, error) {
 				return g.closureHandler.FromClosure(Function[V]{
+					Name:          a.Name,
 					Func:          closureFunc,
 					ArgumentNames: args,
 					Args:          len(a.Names),
-					Ast:           a.Func,
+					Ast:           a,
 					JitCompiler:   g.jit,
 					Counter:       0,
 				}), nil
@@ -1152,7 +1158,7 @@ func (g *FunctionGenerator[V]) createClosureLiteralFunc(a *parser2.ClosureLitera
 			},
 			Args:          len(a.Names),
 			ArgumentNames: a.Names,
-			Ast:           a.Func,
+			Ast:           a,
 			JitCompiler:   g.jit,
 			Counter:       0,
 		})
