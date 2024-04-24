@@ -17,6 +17,7 @@ func main() {
 	jitEnabled := flag.Bool("jit", false, "enable/disable the just in time compiler")
 	flag.Parse()
 	if *jitEnabled {
+		fmt.Println("[JIT] enabled, starting up")
 		parser.SetJit()
 	}
 
@@ -35,6 +36,10 @@ func main() {
 			return
 		}
 		log.Println(result, time.Since(start))
+		if *jitEnabled {
+			fmt.Println("[JIT] execution end, stopping")
+			parser.GetJit().Cancel()
+		}
 		return
 	}
 
