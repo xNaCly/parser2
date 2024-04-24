@@ -37,7 +37,6 @@ func main() {
 		}
 		log.Println(result, time.Since(start))
 		if *jitEnabled {
-			fmt.Println("[JIT] execution end, stopping")
 			parser.GetJit().Cancel()
 		}
 		return

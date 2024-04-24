@@ -63,10 +63,12 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 	c := fun.Ast.(*parser2.ClosureLiteral)
 	c.Name = fun.Name
+	fmt.Printf("[JIT] attempting to compile %q\n", c.Name)
 	err = generateFunction[V](&b, c)
 	if err != nil {
 		return err
 	}
+	fmt.Println("[JIT] compiled to:", b.String())
 	if _, err := b.WriteTo(f); err != nil {
 		return err
 	}

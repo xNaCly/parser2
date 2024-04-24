@@ -14,11 +14,11 @@ func BenchmarkJit(b *testing.B) {
 		input string
 	}{
 		{
-			name:  "anonymous functions",
+			name:  "named functions",
 			input: "func b(a) a; list(%iterations%).map(b).size()",
 		},
 		{
-			name:  "anonymous functions v1",
+			name:  "anonymous functions",
 			input: "list(%iterations%).map(e -> e).size()",
 		},
 	}

@@ -16,7 +16,7 @@ import (
 
 // JIT_CONSTANT sets the threshold the function invocation meta tracing counter
 // has to pass for the function to be considered hot and thus compilable
-var JIT_CONSTANT int = 100_000
+var JIT_CONSTANT int = 1_000
 
 type stackStorage[V any] struct {
 	data []V
@@ -236,14 +236,14 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The stack [st] is used to pass the given argument [a] to the function.
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
+	if f.wasJit && f.JitFunc != nil {
+		// TODO: rework this to work without redirection
+		st.Push(a)
+		return f.JitFunc(st.CreateFrame(1), nil)
+	}
 	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
 		f.wasJit = true
 		f.JitCompiler.Queue <- f
-	}
-
-	if f.wasJit && f.JitFunc != nil {
-		st.Push(a)
-		return f.JitFunc(st.CreateFrame(1), nil)
 	}
 
 	f.Counter++
@@ -371,19 +371,20 @@ func (g *FunctionGenerator[V]) SetNumberParser(numberParser parser2.NumberParser
 func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	g.jit = &Jit[V]{
-		Queue:  make(chan *Function[V]),
+		Queue:  make(chan *Function[V], 16),
 		Ctx:    ctx,
 		Cancel: cancel,
 	}
 	go func() {
 		for {
 			select {
-			case <-g.jit.Ctx.Done():
-				return
 			case f := <-g.jit.Queue:
 				if err := g.jit.Compile(f); err != nil {
 					fmt.Println("[JIT] compilation failed", err)
 				}
+			case <-g.jit.Ctx.Done():
+				fmt.Println("[JIT] execution end, stopping")
+				return
 			}
 		}
 	}()
@@ -1162,6 +1163,7 @@ func (g *FunctionGenerator[V]) createClosureLiteralFunc(a *parser2.ClosureLitera
 			Func: func(st Stack[V], cs []V) (V, error) {
 				return closureFunc(st, closureContext)
 			},
+			Name:          a.Name,
 			Args:          len(a.Names),
 			ArgumentNames: a.Names,
 			Ast:           a,
