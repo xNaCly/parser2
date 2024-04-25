@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
+
 	"github.com/hneemann/iterator"
 	"github.com/hneemann/parser2/funcGen"
 	"github.com/hneemann/parser2/listMap"
-	"math"
-	"sort"
 )
 
 // NewListConvert creates a list containing the given elements if the elements
@@ -878,6 +879,20 @@ func (l *List) Sum(st funcGen.Stack[Value], add func(st funcGen.Stack[Value], a 
 	return sum, nil
 }
 
+func (l *List) Average(st funcGen.Stack[Value], add func(st funcGen.Stack[Value], a Value, b Value) (Value, error)) (Value, error) {
+	size, err := l.Size(st)
+	if err != nil {
+		return nil, err
+	}
+
+	sum, err := l.Sum(st, add)
+	if err != nil {
+		return nil, err
+	}
+
+	return Div(st, sum, Float(size))
+}
+
 func (l *List) MapReduce(st funcGen.Stack[Value]) (Value, error) {
 	initial := st.Get(1)
 	f, err := ToFunc("mapReduce", st, 2, 2)
@@ -1273,6 +1288,18 @@ func (l *List) MovingWindowRemove(st funcGen.Stack[Value]) (*List, error) {
 	return NewList(mainList...), nil
 }
 
+func (l *List) Contains(st funcGen.Stack[Value]) (Value, error) {
+	eqItem := st.Get(1)
+
+	found, err := l.containsItem(st, eqItem, func(stack funcGen.Stack[Value], a, b Value) (bool, error) {
+		return Equal(stack, a, b)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return Bool(found), nil
+}
+
 func (l *List) containsItem(st funcGen.Stack[Value], item Value, equal funcGen.BoolFunc[Value]) (bool, error) {
 	found := false
 	var innerErr error
@@ -1446,9 +1473,6 @@ func createListMethods(
 		"accept": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Accept(stack) }).
 			SetMethodDescription("func(item) bool",
 				"Filters the list by the given function. If the function returns true, the item is accepted, otherwise it is skipped."),
-		"filter": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Accept(stack) }).
-			SetMethodDescription("func(item) bool",
-				"Filters the list by the given function. If the function returns true, the item is accepted, otherwise it is skipped."),
 		"map": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Map(stack) }).
 			SetMethodDescription("func(item) newItem",
 				"Maps the list by the given function. The function is called for each item in the list and the result is "+
@@ -1619,6 +1643,17 @@ func createListMethods(
 		"createInterpolation": MethodAtType(2, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.CreateInterpolation(stack) }).
 			SetMethodDescription("func(item) x", "func(item) y",
 				"Returns a function that interpolates between the given points."),
+
+		// Added functions in fork
+		"contains": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Contains(stack) }).
+			SetMethodDescription("item", "Returns true if the list contains the given item."),
+		"average": MethodAtType(0, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Average(stack, add) }).
+			SetMethodDescription("Returns the average value of the list. Calculated by calling .Sum and dividing by size."),
+
+		// Alias to "accept"
+		"filter": MethodAtType(1, func(list *List, stack funcGen.Stack[Value]) (Value, error) { return list.Accept(stack) }).
+			SetMethodDescription("func(item) bool",
+				"Filters the list by the given function. If the function returns true, the item is accepted, otherwise it is skipped."),
 	}
 }
 func (l *List) GetType() Type {
