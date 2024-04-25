@@ -7,7 +7,6 @@ import (
 	"log"
 	"reflect"
 	"sort"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -15,11 +14,9 @@ import (
 	"github.com/hneemann/parser2/listMap"
 )
 
-// TODO: JIT_CONSTANT needs benchmarking for optimal threshold
-
-// JIT_CONSTANT sets the threshold which the function call meta tracing has to
-// pass to be compiled
-var JIT_CONSTANT int = 1000
+// JIT_CONSTANT sets the threshold the function invocation meta tracing counter
+// has to pass for the function to be considered hot and thus compilable
+var JIT_CONSTANT int = 1_000
 
 type stackStorage[V any] struct {
 	data []V
@@ -239,14 +236,14 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The stack [st] is used to pass the given argument [a] to the function.
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
-	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
-		f.wasJit = true
-		f.JitCompiler.Queue = append(f.JitCompiler.Queue, f)
-	}
-
 	if f.wasJit && f.JitFunc != nil {
+		// TODO: rework this to work without redirection
 		st.Push(a)
 		return f.JitFunc(st.CreateFrame(1), nil)
+	}
+	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
+		f.wasJit = true
+		f.JitCompiler.Queue <- f
 	}
 
 	f.Counter++
@@ -373,19 +370,29 @@ func (g *FunctionGenerator[V]) SetNumberParser(numberParser parser2.NumberParser
 
 func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	g.jit = &Jit[V]{
-		Queue:  make([]*Function[V], 0),
-		ctx:    ctx,
-		cancel: cancel,
+		Queue:  make(chan *Function[V], 16),
+		Ctx:    ctx,
+		Cancel: cancel,
 	}
 	go func() {
-		time.Sleep(time.Millisecond * 20)
-		if err := g.jit.Compile(); err != nil {
-			fmt.Println("[JIT] compilation failed", err)
+		for {
+			select {
+			case f := <-g.jit.Queue:
+				if err := g.jit.Compile(f); err != nil {
+					fmt.Println("[JIT] compilation failed", err)
+				}
+			case <-g.jit.Ctx.Done():
+				fmt.Println("[JIT] execution end, stopping")
+				return
+			}
 		}
 	}()
 	return g
+}
+
+func (g *FunctionGenerator[V]) GetJit() *Jit[V] {
+	return g.jit
 }
 
 func (g *FunctionGenerator[V]) SetStringConverter(stringConverter parser2.StringConverter[V]) *FunctionGenerator[V] {
@@ -1156,6 +1163,7 @@ func (g *FunctionGenerator[V]) createClosureLiteralFunc(a *parser2.ClosureLitera
 			Func: func(st Stack[V], cs []V) (V, error) {
 				return closureFunc(st, closureContext)
 			},
+			Name:          a.Name,
 			Args:          len(a.Names),
 			ArgumentNames: a.Names,
 			Ast:           a,
