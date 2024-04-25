@@ -181,17 +181,19 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 
 // INFO: Function
 
-type MetaDataParameters struct {
+type MetaDataParameter struct {
 	Name string
 	Type string
+}
+
+type MetaData struct {
+	Parameters []MetaDataParameter
 }
 
 // Function represents a function in the interpreter runtime
 type Function[V any] struct {
 	// Func is the function itself
 	Func ParserFunc[V]
-	// Func is the function itself, but compiled to machine code by the jit compiler
-	JitFunc func(V) (V, error)
 	// Args gives the number of arguments required. It is used for checking
 	// the number of arguments in the call. The value -1 means any number of
 	// arguments is allowed
@@ -200,18 +202,24 @@ type Function[V any] struct {
 	IsPure bool
 	// Description is a description of the function
 	Description *FunctionDescription
+
+	// jit specific data
+
 	// Counter stores the amount of calls made to the function
 	Counter int
 	// Ast stores the abstract syntax tree, used for jit compilation of the given function
 	Ast parser2.AST
-	// JitCompiler holds the compiler the function invokes once the
-	// JIT_CONSTANT threshold is reached
+	// Func is the function itself, but compiled to machine code by the jit compiler
+	JitFunc func(...any) (V, error)
+	// JitCompiler holds a pointer to the compiler the function invokes once
+	// the JIT_CONSTANT threshold is reached
 	JitCompiler *Jit[V]
 	// ArgumentNames contains the list of parameter names of the function
 	ArgumentNames []string
 	// Name holds the name of the function
-	Name     string
-	MetaData []MetaDataParameters
+	Name string
+	// MetaData holds the necessary data for the jit to compile valid functions
+	MetaData *MetaData
 	// wasJit is true if the function was jit compiled
 	wasJit bool
 }
@@ -243,19 +251,23 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 	if f.wasJit && f.JitFunc != nil {
-		out, err := f.JitFunc(st.Get(0))
+		out, err := f.JitFunc(f.JitCompiler.ValueToUnderlying(a))
 		// compiled function had a panic, throwing compiled function away and
 		// bailing out to the interpreter
 		if err != nil {
+			f.JitFunc = nil
 			goto bailout
 		}
-		f.JitFunc = nil
 		return out, nil
 	}
 
 	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
 		f.wasJit = true
-		// TODO: introduce metatracing
+		f.MetaData = &MetaData{
+			Parameters: []MetaDataParameter{
+				{Name: f.ArgumentNames[0], Type: f.JitCompiler.TypeToString(a)},
+			},
+		}
 		f.JitCompiler.Queue <- f
 	}
 
@@ -394,7 +406,7 @@ func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
 			select {
 			case f := <-g.jit.Queue:
 				if err := g.jit.Compile(f); err != nil {
-					fmt.Println("[JIT] compilation failed", err)
+					log.Println("[JIT] compilation failed, skipping this function", err)
 				}
 			case <-g.jit.Ctx.Done():
 				return

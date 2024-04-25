@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"plugin"
@@ -15,9 +16,7 @@ import (
 )
 
 // TODO:
-// - accept multiple arguments for closures
-// - metatracing for closure argument types
-// - type assertions in generated code, see: https://github.com/xNaCly/Sophia/pull/9
+// - named functions are currently not being compiled
 
 // Jit implements just in time compilation of expressions, this requires a not
 // to neglect start up time and thus should only be invoked once the callee is
@@ -37,6 +36,14 @@ type Jit[V any] struct {
 	Cancel context.CancelFunc
 	// counter is used for compiling closures and keeping track of them in shared objects
 	counter uint64
+	// TypeToString is used to convert the given arguments type to a string
+	// representation the jit compiler uses to assert the function parameters
+	// type
+	TypeToString func(V) string
+	// ValueToUnderlying converts the argument to its underlying go type
+	ValueToUnderlying func(V) any
+	// UnderlyingToValue converts the argument to the generic type
+	UnderlyingToValue func(any) V
 }
 
 // Invokes the code generation, traverses the abstract syntax tree, calls
@@ -55,7 +62,8 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	b := bytes.Buffer{}
-	b.WriteString(`package main;import "errors";`)
+	// b.WriteString(`package main;import "errors";`)
+	b.WriteString(`package main;`)
 	// logic for naming closures
 	if len(fun.Name) == 0 {
 		fun.Name = string([]byte{'c', byte(j.counter + '0')})
@@ -63,12 +71,12 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 	c := fun.Ast.(*parser2.ClosureLiteral)
 	c.Name = fun.Name
-	// fmt.Printf("[JIT] attempting to compile %q\n", c.Name)
-	err = generateFunction[V](&b, c)
+	log.Printf("[JIT] attempting to compile %q\n", c.Name)
+	err = generateFunction[V](&b, c, fun.MetaData)
 	if err != nil {
 		return err
 	}
-	fmt.Println("[JIT] compiled to:", b.String())
+	log.Println("[JIT] compiled to:", b.String())
 	if _, err := b.WriteTo(f); err != nil {
 		return err
 	}
@@ -77,9 +85,9 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	defer os.Remove(path)
-	funct, err := function[V]("JIT_"+fun.Name, path)
+	funct, err := j.function("JIT_"+fun.Name, path)
 	if err != nil {
-		fmt.Printf("[JIT] failed to compile %s: %s\n", fun.Name, err)
+		log.Printf("[JIT] failed to compile %s: %s\n", fun.Name, err)
 		return err
 	}
 	fun.JitFunc = funct
@@ -87,19 +95,25 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 }
 
 // generateFunction generates the go code for a given closure recursively
-func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral) error {
+func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral, m *MetaData) error {
 	b.WriteString("func ")
 	b.WriteString("JIT_")
 	b.WriteString(fun.Name)
-	b.WriteRune('(')
-	for i, arg := range fun.Names {
-		b.WriteString(arg)
-		b.WriteString(" any")
-		if i+1 != len(fun.Names) {
-			b.WriteRune(',')
+	// b.WriteString(`(args ...any) (any, error) { if err := recover(); err != nil { return nil, errors.New("panic in jit compiled function") };`)
+	b.WriteString("(args ...any) (any, error) { ")
+	for i, arg := range m.Parameters {
+		b.WriteString(arg.Name)
+		b.WriteString(" := ")
+		b.WriteString("args[")
+		if i > 9 {
+			return errors.New("More than 9 arguments not supported for compiled functions")
 		}
+		b.WriteRune(rune(i + 48))
+		b.WriteString("].(")
+		b.WriteString(arg.Type)
+		b.WriteString(");")
 	}
-	b.WriteString(`) (any, error) { if err := recover(); err != nil { return nil, errors.New("panic in jit compiled function") };return `)
+	b.WriteString("return ")
 	err := codegen[V](b, fun.Func)
 	if err != nil {
 		return err
@@ -150,7 +164,7 @@ func invokeCompiler(path string) (soPath string, err error) {
 
 // function extracts and returns the function with the given name from the
 // shared object / go plugin at the given path
-func function[V any](name string, path string) (func(V) (V, error), error) {
+func (j *Jit[V]) function(name string, path string) (func(...any) (V, error), error) {
 	p, err := plugin.Open(path)
 	if err != nil {
 		return nil, err
@@ -160,14 +174,17 @@ func function[V any](name string, path string) (func(V) (V, error), error) {
 		return nil, err
 	}
 
-	funct, ok := symbol.(func(any) (any, error))
+	funct, ok := symbol.(func(...any) (any, error))
 	if !ok {
-		var e func(any) (any, error)
+		var e func(...any) (any, error)
 		return nil, fmt.Errorf("Failed to cast symbol of type %T to %T", symbol, e)
 	}
-
-	return func(v V) (V, error) {
-		out, err := funct(v)
-		return out.(V), err
+	return func(a ...any) (V, error) {
+		out, err := funct(a...)
+		if err != nil {
+			var e V
+			return e, err
+		}
+		return j.UnderlyingToValue(out), nil
 	}, nil
 }

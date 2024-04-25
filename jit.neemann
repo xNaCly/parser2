@@ -1,15 +1,5 @@
 // vim: filetype=kotlin
-
-let example1 = [-2, -1, -1, 1, 2, 3];
-let example2 = [-3, -2, -1, 0, 0, 1, 2];
-let example3 = [5, 20, 66, 1314];
-
-func b(arr)
-    let size = arr.size();
-    let neg = arr.filter(e -> e > 0).size();
-    max(size, neg);
-
-let s = list(10_000_000)
-    .map(e -> e+1) 
-    .last();
-s
+func b(a) 
+    a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a;
+let s = list(500_000).map(b).sum();
+5
