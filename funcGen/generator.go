@@ -181,12 +181,17 @@ func (f *FunctionDescription) WriteTo(b *bytes.Buffer, name string) {
 
 // INFO: Function
 
+type MetaDataParameters struct {
+	Name string
+	Type string
+}
+
 // Function represents a function in the interpreter runtime
 type Function[V any] struct {
 	// Func is the function itself
 	Func ParserFunc[V]
 	// Func is the function itself, but compiled to machine code by the jit compiler
-	JitFunc ParserFunc[V]
+	JitFunc func(V) (V, error)
 	// Args gives the number of arguments required. It is used for checking
 	// the number of arguments in the call. The value -1 means any number of
 	// arguments is allowed
@@ -205,7 +210,8 @@ type Function[V any] struct {
 	// ArgumentNames contains the list of parameter names of the function
 	ArgumentNames []string
 	// Name holds the name of the function
-	Name string
+	Name     string
+	MetaData []MetaDataParameters
 	// wasJit is true if the function was jit compiled
 	wasJit bool
 }
@@ -237,15 +243,23 @@ func (f Function[V]) SetDescription(descr ...string) Function[V] {
 // The pushed value is removed after the function is called.
 func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 	if f.wasJit && f.JitFunc != nil {
-		// TODO: rework this to work without redirection
-		st.Push(a)
-		return f.JitFunc(st.CreateFrame(1), nil)
+		out, err := f.JitFunc(st.Get(0))
+		// compiled function had a panic, throwing compiled function away and
+		// bailing out to the interpreter
+		if err != nil {
+			goto bailout
+		}
+		f.JitFunc = nil
+		return out, nil
 	}
+
 	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
 		f.wasJit = true
+		// TODO: introduce metatracing
 		f.JitCompiler.Queue <- f
 	}
 
+bailout:
 	f.Counter++
 	st.Push(a)
 	return f.Func(st.CreateFrame(1), nil)
@@ -383,7 +397,6 @@ func (g *FunctionGenerator[V]) SetJit() *FunctionGenerator[V] {
 					fmt.Println("[JIT] compilation failed", err)
 				}
 			case <-g.jit.Ctx.Done():
-				fmt.Println("[JIT] execution end, stopping")
 				return
 			}
 		}

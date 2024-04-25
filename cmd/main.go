@@ -35,10 +35,13 @@ func main() {
 			log.Fatalln("Eval error:", err)
 			return
 		}
-		log.Println(result, time.Since(start))
 		if *jitEnabled {
-			parser.GetJit().Cancel()
+			jit := parser.GetJit()
+			jit.Cancel()
+			<-jit.Ctx.Done()
+			fmt.Println("[JIT] got stop signal, stopped jit")
 		}
+		log.Println(result, time.Since(start))
 		return
 	}
 

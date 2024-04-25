@@ -10,6 +10,6 @@ func b(arr)
     max(size, neg);
 
 let s = list(10_000_000)
-    .map(e -> e) 
+    .map(e -> e+1) 
     .last();
 s

@@ -55,7 +55,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	b := bytes.Buffer{}
-	b.WriteString("package main;")
+	b.WriteString(`package main;import "errors";`)
 	// logic for naming closures
 	if len(fun.Name) == 0 {
 		fun.Name = string([]byte{'c', byte(j.counter + '0')})
@@ -63,7 +63,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	}
 	c := fun.Ast.(*parser2.ClosureLiteral)
 	c.Name = fun.Name
-	fmt.Printf("[JIT] attempting to compile %q\n", c.Name)
+	// fmt.Printf("[JIT] attempting to compile %q\n", c.Name)
 	err = generateFunction[V](&b, c)
 	if err != nil {
 		return err
@@ -82,14 +82,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		fmt.Printf("[JIT] failed to compile %s: %s\n", fun.Name, err)
 		return err
 	}
-	fun.JitFunc = func(stack Stack[V], closureStore []V) (V, error) {
-		out, err := funct(stack.Get(0))
-		var e V
-		if err != nil {
-			return e, err
-		}
-		return out, nil
-	}
+	fun.JitFunc = funct
 	return nil
 }
 
@@ -106,13 +99,12 @@ func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral) error
 			b.WriteRune(',')
 		}
 	}
-	b.WriteString(") any {")
-	b.WriteString("return ")
+	b.WriteString(`) (any, error) { if err := recover(); err != nil { return nil, errors.New("panic in jit compiled function") };return `)
 	err := codegen[V](b, fun.Func)
 	if err != nil {
 		return err
 	}
-	b.WriteString("}")
+	b.WriteString(", nil}")
 	return err
 }
 
@@ -168,14 +160,14 @@ func function[V any](name string, path string) (func(V) (V, error), error) {
 		return nil, err
 	}
 
-	funct, ok := symbol.(func(any) any)
+	funct, ok := symbol.(func(any) (any, error))
 	if !ok {
 		var e func(any) (any, error)
 		return nil, fmt.Errorf("Failed to cast symbol of type %T to %T", symbol, e)
 	}
 
 	return func(v V) (V, error) {
-		out := funct(v)
-		return out.(V), nil
+		out, err := funct(v)
+		return out.(V), err
 	}, nil
 }
