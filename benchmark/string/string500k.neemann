@@ -1,0 +1,5 @@
+// vim: filetype=kotlin
+func b(a)
+    a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a;
+let s = list(500_000).map(e->e.string()).map(b).size();
+s

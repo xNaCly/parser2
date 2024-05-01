@@ -1,0 +1,5 @@
+// vim: filetype=kotlin
+func b(a)
+    a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a;
+let s = list(1_000_000).map(b).sum();
+s
