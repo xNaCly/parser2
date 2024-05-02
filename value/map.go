@@ -12,11 +12,11 @@ import (
 
 // MapStorage is the abstraction of a map
 type MapStorage interface {
-	//Get returns the value for the given key and true if the key is present
+	// Get returns the value for the given key and true if the key is present
 	Get(key string) (Value, bool)
-	//Iter iterates over the map
+	// Iter iterates over the map
 	Iter(yield func(key string, v Value) bool) bool
-	//Size returns the number of entries in the map
+	// Size returns the number of entries in the map
 	Size() int
 }
 

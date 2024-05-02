@@ -46,6 +46,15 @@ func (l ListMap[V]) Iter(yield func(key string, v V) bool) bool {
 	return true
 }
 
+func (l ListMap[V]) ToNative() map[string]any {
+	m := make(map[string]any, l.Size())
+	l.Iter(func(key string, v V) bool {
+		m[key] = v
+		return true
+	})
+	return m
+}
+
 func (l ListMap[V]) Size() int {
 	return len(l)
 }

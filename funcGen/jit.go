@@ -10,7 +10,9 @@ import (
 	"os/exec"
 	"plugin"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hneemann/parser2"
 )
@@ -50,6 +52,7 @@ type Jit[V any] struct {
 // the go compiler, opens the compiled plugin and returns the generated and
 // compiled function
 func (j *Jit[V]) Compile(fun *Function[V]) error {
+	start := time.Now()
 	if runtime.GOOS == "windows" {
 		return fmt.Errorf(`
 The go plugin api is not supported on windows, just in time compilation is therefore not available.
@@ -62,7 +65,6 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	b := bytes.Buffer{}
-	// b.WriteString(`package main;import "errors";`)
 	b.WriteString(`package main;`)
 	// logic for naming closures
 	if len(fun.Name) == 0 {
@@ -72,7 +74,7 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 	c := fun.Ast.(*parser2.ClosureLiteral)
 	c.Name = fun.Name
 	log.Printf("[JIT] attempting to compile %q\n", c.Name)
-	err = generateFunction[V](&b, c, fun.MetaData)
+	err = j.generateFunction(&b, c, fun.MetaData)
 	if err != nil {
 		return err
 	}
@@ -91,15 +93,15 @@ See: https://pkg.go.dev/plugin#hdr-Warnings (%w)`, errors.ErrUnsupported)
 		return err
 	}
 	fun.JitFunc = funct
+	log.Printf("[JIT] compiling %q took %s\n", c.Name, time.Since(start))
 	return nil
 }
 
 // generateFunction generates the go code for a given closure recursively
-func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral, m *MetaData) error {
+func (j *Jit[V]) generateFunction(b *bytes.Buffer, fun *parser2.ClosureLiteral, m *MetaData) error {
 	b.WriteString("func ")
 	b.WriteString("JIT_")
 	b.WriteString(fun.Name)
-	// b.WriteString(`(args ...any) (any, error) { if err := recover(); err != nil { return nil, errors.New("panic in jit compiled function") };`)
 	b.WriteString("(args ...any) (any, error) { ")
 	for i, arg := range m.Parameters {
 		b.WriteString(arg.Name)
@@ -114,7 +116,7 @@ func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral, m *Me
 		b.WriteString(");")
 	}
 	b.WriteString("return ")
-	err := codegen[V](b, fun.Func)
+	err := j.codegen(b, fun.Func)
 	if err != nil {
 		return err
 	}
@@ -122,32 +124,99 @@ func generateFunction[V any](b *bytes.Buffer, fun *parser2.ClosureLiteral, m *Me
 	return err
 }
 
-func codegen[V any](b *bytes.Buffer, ast parser2.AST) error {
-	switch t := ast.(type) {
+func (j *Jit[V]) codeGenWithoutAstTypes(b *bytes.Buffer, a any) error {
+	switch t := a.(type) {
 	case *parser2.Const[V]:
-		b.WriteString(t.String())
-	case *parser2.Ident:
-		b.WriteString(t.Name)
-	case *parser2.Operate:
-		err := codegen[V](b, t.A)
+		err := j.constantWriter(b, j.ValueToUnderlying(t.Value))
 		if err != nil {
 			return err
 		}
-		b.WriteString(t.Operator)
-		err = codegen[V](b, t.B)
+	case *parser2.MapLiteral:
+		err := j.constantWriter(b, t.Map.ToNative())
+		if err != nil {
+			return err
+		}
+	case *parser2.Ident:
+		b.WriteString(t.Name)
+	case *parser2.MapAccess:
+		j.codegen(b, t.MapValue)
+		b.WriteString("[\"")
+		b.WriteString(t.Key)
+		b.WriteString("\"]")
+	case *parser2.Operate:
+		err := j.codeGenWithoutAstTypes(b, t.A)
+		if err != nil {
+			return err
+		}
+		op := t.Operator
+		switch op {
+		case "=":
+			op = "=="
+		case "&":
+			op = "&&"
+		case "|":
+			op = "||"
+		}
+		b.WriteString(op)
+		err = j.codeGenWithoutAstTypes(b, t.B)
 		if err != nil {
 			return err
 		}
 	case *parser2.Unary:
 		b.WriteString(t.Operator)
-		err := codegen[V](b, t.Value)
+		err := j.codeGenWithoutAstTypes(b, t.Value)
 		if err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("Codegen: Expression %T not yet supported by jit: %q", t, t.String())
+		return fmt.Errorf("Codegen: Expression %T not yet supported by jit", t)
 	}
 	return nil
+}
+
+func (j *Jit[V]) constantWriter(b *bytes.Buffer, a any) error {
+	switch t := a.(type) {
+	case int:
+		b.WriteString(strconv.FormatInt(int64(t), 10))
+	case float64:
+		b.WriteString(strconv.FormatFloat(t, 'E', -1, 64))
+	case string:
+		b.WriteRune('"')
+		b.WriteString(t)
+		b.WriteRune('"')
+
+		// TODO: test this
+		// case []any:
+		// 	b.WriteString("[]any{")
+		// 	for _, v := range t {
+		// 		err := j.writer(b, v)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		b.WriteRune(',')
+		// 	}
+		// 	b.WriteRune('}')
+	case map[string]any:
+		b.WriteString("map[string]any{")
+		for k, v := range t {
+			b.WriteRune('"')
+			b.WriteString(k)
+			b.WriteString("\":")
+			err := j.codeGenWithoutAstTypes(b, v)
+			if err != nil {
+				return err
+			}
+			b.WriteRune(',')
+		}
+		b.WriteRune('}')
+	default:
+		return fmt.Errorf("Codegen: Expression %T not yet supported by constantWriter jit component", t)
+	}
+	return nil
+}
+
+func (j *Jit[V]) codegen(b *bytes.Buffer, ast parser2.AST) error {
+	return j.codeGenWithoutAstTypes(b, ast)
 }
 
 // invokeCompiler invokes the go compiler to create a shared object / go plugin from
