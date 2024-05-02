@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/hneemann/parser2/value"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const DataBaseDir = "data/"
@@ -151,7 +153,31 @@ func importImdbIntoSqlDB(conn *sql.DB, imdbTitles []ImdbTitle) {
 	}
 }
 
-func RunImdbBenchmarks(sqliteConn *sql.DB, mariadbConn *sql.DB) {
+func importImdbIntoMongoDB(collection *mongo.Collection, imdbTitles []ImdbTitle) {
+	// If count matches, assume data is correct and skip import
+	count, err := collection.CountDocuments(context.Background(), nil)
+	if err == nil && count == int64(len(imdbTitles)) {
+		fmt.Println("Collection already imported and row count is correct. Assuming data is correct and skipping import.")
+		return
+	}
+
+	// Drop collection if exists
+	collection.Drop(context.Background())
+
+	// We need to convert the data to a slice of interfaces because
+	// of the way the MongoDB driver works. It only accepts interface slices.
+	interfaceData := make([]interface{}, 0, len(imdbTitles))
+	for _, entry := range imdbTitles {
+		interfaceData = append(interfaceData, entry)
+	}
+
+	_, err = collection.InsertMany(context.Background(), interfaceData)
+	if err != nil {
+		log.Fatalln("Failed to insert data into MongoDB:", err)
+	}
+}
+
+func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollection *mongo.Collection) {
 	fmt.Println("Loading IMDB data...")
 	loadStartTime := time.Now()
 	data, err := loadImdbData()
@@ -180,10 +206,10 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariadbConn *sql.DB) {
 	parser := value.New()
 
 	executeInMemoryQuery(parser, "count between 2000 and 2005", "imdb.filter(t -> t.startYear >= 2000 & t.startYear <= 2005).size()", "imdb", imdbTitles)
-	// executeInMemoryQuery(parser, "average runtime", "imdb.map(t -> t.runtimeMinutes).average()", "imdb", imdbTitles)
-	// executeInMemoryQuery(parser, "count containing \"You\" in primaryTitle", "imdb.filter(t -> t.primaryTitle.contains(\"You\")).size()", "imdb", imdbTitles)
-	// executeInMemoryQuery(parser, "count of entries with three genres", "imdb.filter(t -> t.genres.size() = 3).size()", "imdb", imdbTitles)
-	// executeInMemoryQuery(parser, "count of entries with genre Animation and Fantasy", "imdb.filter(t -> t.genres.contains(\"Animation\") & t.genres.contains(\"Fantasy\")).size()", "imdb", imdbTitles)
+	executeInMemoryQuery(parser, "average runtime", "imdb.map(t -> t.runtimeMinutes).average()", "imdb", imdbTitles)
+	executeInMemoryQuery(parser, "count containing \"You\" in primaryTitle", "imdb.filter(t -> t.primaryTitle.contains(\"You\")).size()", "imdb", imdbTitles)
+	executeInMemoryQuery(parser, "count of entries with three genres", "imdb.filter(t -> t.genres.size() = 3).size()", "imdb", imdbTitles)
+	executeInMemoryQuery(parser, "count of entries with genre Animation and Fantasy", "imdb.filter(t -> t.genres.contains(\"Animation\") & t.genres.contains(\"Fantasy\")).size()", "imdb", imdbTitles)
 
 	// Import data into SQLite
 	fmt.Println("Importing data into in-memory sqlite...")
@@ -205,10 +231,10 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariadbConn *sql.DB) {
 	// Same for mariadb
 	fmt.Println("Importing data into mariadb...")
 	importStartTime = time.Now()
-	importImdbIntoSqlDB(mariadbConn, data)
+	importImdbIntoSqlDB(mariaDbConn, data)
 	fmt.Println("MariaDB import done in", time.Since(importStartTime))
 
-	r, err = mariadbConn.Query("SELECT COUNT(*) FROM imdb")
+	r, err = mariaDbConn.Query("SELECT COUNT(*) FROM imdb")
 	if err != nil {
 		log.Fatalln("Failed to count entries in mariadb database:", err)
 	}
@@ -216,4 +242,23 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariadbConn *sql.DB) {
 	r.Next()
 	r.Scan(&count)
 	fmt.Println("Count of entries in mariadb database:", count)
+
+	// Import data into MongoDB
+	fmt.Println("Importing data into MongoDB...")
+	importStartTime = time.Now()
+	mongoDbCollection.Drop(context.Background())
+
+	interfaceData := make([]interface{}, 0, len(data))
+	for _, entry := range data {
+		interfaceData = append(interfaceData, entry)
+	}
+
+	ordered := false
+	_, err = mongoDbCollection.InsertMany(context.Background(), interfaceData, &options.InsertManyOptions{
+		Ordered: &ordered,
+	})
+	if err != nil {
+		log.Fatalln("Failed to insert data into MongoDB:", err)
+	}
+	fmt.Println("MongoDB import done in", time.Since(importStartTime))
 }

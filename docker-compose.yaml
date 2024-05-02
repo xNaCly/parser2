@@ -1,5 +1,5 @@
 services:
-  db:
+  mariadb:
     image: mariadb:11.3.2-jammy
     restart: always
     environment:
@@ -15,4 +15,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
 
