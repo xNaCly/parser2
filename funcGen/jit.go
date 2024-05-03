@@ -131,6 +131,13 @@ func (j *Jit[V]) codeGenWithoutAstTypes(b *bytes.Buffer, a any) error {
 		if err != nil {
 			return err
 		}
+	case *parser2.Let:
+		b.WriteString(t.Name)
+		b.WriteString(":=")
+		err := j.codeGenWithoutAstTypes(b, t.Value)
+		if err != nil {
+			return err
+		}
 	case *parser2.MapLiteral:
 		err := j.constantWriter(b, t.Map.ToNative())
 		if err != nil {
