@@ -17,7 +17,8 @@ func toUnderlying(v value.Value) (o any) {
 	case value.Bool:
 		o, _ = t.ToBool()
 	case value.Int:
-		o, _ = t.ToInt()
+		to, _ := t.ToInt()
+		o = float64(to)
 	case value.Float:
 		o, _ = t.ToFloat()
 	case value.String:
@@ -70,9 +71,7 @@ func main() {
 			switch v.(type) {
 			case value.String:
 				return "string"
-			case value.Int:
-				return "int"
-			case value.Float:
+			case value.Float, value.Int:
 				return "float64"
 			case value.Bool:
 				return "bool"
@@ -99,13 +98,13 @@ func main() {
 			log.Fatalln("Eval error:", err)
 			return
 		}
+		log.Println(result, time.Since(start))
 		if *jitEnabled {
 			jit := parser.GetJit()
 			jit.Cancel()
 			<-jit.Ctx.Done()
 			log.Println("[JIT] got stop signal, stopped jit")
 		}
-		log.Println(result, time.Since(start))
 		return
 	}
 
