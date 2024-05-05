@@ -848,9 +848,7 @@ func (l *List) Reduce(st funcGen.Stack[Value]) (Value, error) {
 		return nil, err
 	}
 	return iterator.Reduce[Value](st, l.iterable, func(st funcGen.Stack[Value], a, b Value) (Value, error) {
-		st.Push(a)
-		st.Push(b)
-		return f.Func(st.CreateFrame(2), nil)
+		return f.EvalSt(st, a, b)
 	})
 }
 

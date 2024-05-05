@@ -1,5 +1,14 @@
 // vim: filetype=kotlin
-func b(a) 
-    a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a*a*a/25*a-12+a/a*a;
-let s = list(500_000).map(b).sum();
-5
+let r = list(100_000)
+    .map(e -> e.string())
+    .map(e -> {Name: e})
+    .map(p -> p.Name)
+    .reduce((a,b) -> a+", "+b)
+    .len();
+
+list(100_000)
+    .map(e -> {Age:e})
+    .filter(p -> p.Age>21)
+    .map(p -> p.Age.string())
+    .reduce((a,b) -> a+", "+b)
+    .len()

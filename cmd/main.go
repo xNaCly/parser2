@@ -12,6 +12,51 @@ import (
 	"github.com/hneemann/parser2/value"
 )
 
+func toUnderlying(v value.Value) (o any) {
+	switch t := v.(type) {
+	case value.Bool:
+		o, _ = t.ToBool()
+	case value.Int:
+		to, _ := t.ToInt()
+		o = float64(to)
+	case value.Float:
+		o, _ = t.ToFloat()
+	case value.String:
+		o, _ = t.ToString(funcGen.Stack[value.Value]{})
+	case value.Map:
+		m := make(map[string]any, t.Size())
+		t.Iter(func(key string, v value.Value) bool {
+			m[key] = toUnderlying(v)
+			return true
+		})
+		o = m
+	default:
+		panic(fmt.Sprintf("%T conversion to underlying type not supported by jit", t))
+	}
+	return
+}
+
+func toValue(v any) value.Value {
+	switch t := v.(type) {
+	case int:
+		return value.Int(t)
+	case float64:
+		return value.Float(t)
+	case bool:
+		return value.Bool(t)
+	case string:
+		return value.String(t)
+	case map[string]any:
+		m := make(value.RealMap, len(t))
+		for k, v := range t {
+			m[k] = toValue(v)
+		}
+		return value.NewMap(m)
+	default:
+		panic(fmt.Sprintf("%T conversion to high level type not supported by jit", t))
+	}
+}
+
 func main() {
 	parser := value.New()
 	parser.GetParser().AllowComments()
@@ -20,48 +65,18 @@ func main() {
 	if *jitEnabled {
 		log.Println("[JIT] enabled, starting up")
 		parser.SetJit()
-		parser.GetJit().UnderlyingToValue = func(v any) value.Value {
-			switch t := v.(type) {
-			case int:
-				return value.Int(t)
-			case float64:
-				return value.Float(t)
-			case bool:
-				return value.Bool(t)
-			case string:
-				return value.String(t)
-			default:
-				panic(fmt.Sprintf("%T conversion to value not supported by jit", t))
-			}
-		}
-		parser.GetJit().ValueToUnderlying = func(v value.Value) any {
-			switch t := v.(type) {
-			case value.Bool:
-				o, _ := t.ToBool()
-				return o
-			case value.Int:
-				o, _ := t.ToInt()
-				return o
-			case value.Float:
-				o, _ := t.ToFloat()
-				return o
-			case value.String:
-				o, _ := t.ToString(funcGen.Stack[value.Value]{})
-				return o
-			default:
-				panic(fmt.Sprintf("%T conversion to underlying type not supported by jit", t))
-			}
-		}
+		parser.GetJit().UnderlyingToValue = toValue
+		parser.GetJit().ValueToUnderlying = toUnderlying
 		parser.GetJit().TypeToString = func(v value.Value) string {
 			switch v.(type) {
 			case value.String:
 				return "string"
-			case value.Int:
-				return "int"
-			case value.Float:
+			case value.Float, value.Int:
 				return "float64"
 			case value.Bool:
 				return "bool"
+			case value.Map:
+				return "map[string]any"
 			default:
 				return "any"
 			}
@@ -77,18 +92,19 @@ func main() {
 			return
 		}
 
+		log.Println("Starting eval")
 		result, err := f.Eval()
 		if err != nil {
 			log.Fatalln("Eval error:", err)
 			return
 		}
+		log.Println(result, time.Since(start))
 		if *jitEnabled {
 			jit := parser.GetJit()
 			jit.Cancel()
 			<-jit.Ctx.Done()
 			log.Println("[JIT] got stop signal, stopped jit")
 		}
-		log.Println(result, time.Since(start))
 		return
 	}
 

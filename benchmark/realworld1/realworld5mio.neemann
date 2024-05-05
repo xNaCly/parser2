@@ -1,0 +1,9 @@
+// vim: filetype=kotlin
+
+list(5_000_000)
+    .filter(e -> e >= 1)
+    .map(e -> ((1024*(1024*e))/(e*1024))+(e*e+e*e-e*e+e*e)*1024*1024*1024)
+    .map(e -> {Key: "Number", Value: e}.Value)
+    .map(e -> e.string())
+    .map(e -> e+e+e+e+e+e+e)
+    .size()

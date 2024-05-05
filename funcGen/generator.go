@@ -256,6 +256,8 @@ func (f *Function[V]) Eval(st Stack[V], a V) (V, error) {
 		// bailing out to the interpreter
 		if err != nil {
 			f.JitFunc = nil
+			f.wasJit = false
+			f.Counter = 0
 			goto bailout
 		}
 		return out, nil
@@ -280,12 +282,40 @@ bailout:
 // EvalSt is used to evaluate a function with multiple arguments
 // The stack [st] is used to pass the given arguments to the function.
 // The pushed values are removed after the function is called.
-func (f Function[V]) EvalSt(st Stack[V], a ...V) (V, error) {
-	// TODO: hit compilation
+func (f *Function[V]) EvalSt(st Stack[V], a ...V) (V, error) {
+	if f.wasJit && f.JitFunc != nil {
+		args := make([]any, len(a))
+		for i, e := range a {
+			args[i] = f.JitCompiler.ValueToUnderlying(e)
+		}
+
+		out, err := f.JitFunc(args...)
+		// compiled function had a panic, throwing compiled function away and
+		// bailing out to the interpreter
+		if err != nil {
+			f.JitFunc = nil
+			f.wasJit = false
+			f.Counter = 0
+			goto bailout
+		}
+		return out, nil
+	}
+
+	if !f.wasJit && f.Counter >= JIT_CONSTANT && f.JitCompiler != nil && f.Ast != nil {
+		f.wasJit = true
+		params := make([]MetaDataParameter, len(a))
+		for i, e := range a {
+			params[i] = MetaDataParameter{Name: f.ArgumentNames[i], Type: f.JitCompiler.TypeToString(e)}
+		}
+		f.MetaData = &MetaData{Parameters: params}
+		f.JitCompiler.Queue <- f
+	}
+
+bailout:
+	f.Counter++
 	for _, e := range a {
 		st.Push(e)
 	}
-	f.Counter++
 	return f.Func(st.CreateFrame(len(a)), nil)
 }
 
@@ -684,14 +714,15 @@ func (g *FunctionGenerator[V]) generateIntern(args []string, exp string, ThisNam
 		return nil, err
 	}
 	return func(st Stack[V]) (val V, err error) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Print("panic in function: ", rec)
-				var zero V
-				val = zero
-				err = parser2.AnyToError(rec)
-			}
-		}()
+		// TODO:
+		// defer func() {
+		// 	if rec := recover(); rec != nil {
+		// 		log.Print("panic in function: ", rec)
+		// 		var zero V
+		// 		val = zero
+		// 		err = parser2.AnyToError(rec)
+		// 	}
+		// }()
 		return f(st, nil)
 	}, nil
 }
