@@ -1,7 +1,8 @@
-package benchmark
+package listbench
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -63,5 +64,23 @@ func executeInMemoryQuery(parser *value.FunctionGenerator, operationName string,
 	}
 
 	fmt.Println("Result:", result)
+	fmt.Println("Execution time:", time.Since(executionStartTime))
+}
+
+func executeSqlQuery(conn *sql.DB, operationName string, query string) {
+	fmt.Println("Executing", operationName+":", "\""+query+"\"")
+
+	executionStartTime := time.Now()
+	result, err := conn.Query(query)
+	if err != nil {
+		log.Fatalln("Failed to execute query:", err)
+	}
+	defer result.Close()
+
+	var res float64
+	result.Next()
+	result.Scan(&res)
+
+	fmt.Println("Result:", res)
 	fmt.Println("Execution time:", time.Since(executionStartTime))
 }

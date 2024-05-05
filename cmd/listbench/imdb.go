@@ -1,4 +1,4 @@
-package benchmark
+package listbench
 
 import (
 	"compress/gzip"
@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/hneemann/parser2/value"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const DataBaseDir = "data/"
@@ -96,12 +96,13 @@ func loadImdbData() ([]ImdbTitle, error) {
 	return entries, nil
 }
 
-func importImdbIntoSqlDB(conn *sql.DB, imdbTitles []ImdbTitle) {
+func importImdbIntoSqlDb(conn *sql.DB, imdbTitles []ImdbTitle) {
 	// Check whether the table already exists and has the correct row count
 	// If yes, skip the import
 	// If not, drop the table and import the data
 	r, err := conn.Query("SELECT COUNT(*) FROM imdb")
 	if err == nil {
+		defer r.Close()
 		// Count worked, so the table exists
 		var count int
 		r.Next()
@@ -153,9 +154,9 @@ func importImdbIntoSqlDB(conn *sql.DB, imdbTitles []ImdbTitle) {
 	}
 }
 
-func importImdbIntoMongoDB(collection *mongo.Collection, imdbTitles []ImdbTitle) {
+func importImdbIntoMongoDb(collection *mongo.Collection, imdbTitles []ImdbTitle) {
 	// If count matches, assume data is correct and skip import
-	count, err := collection.CountDocuments(context.Background(), nil)
+	count, err := collection.CountDocuments(context.Background(), bson.D{})
 	if err == nil && count == int64(len(imdbTitles)) {
 		fmt.Println("Collection already imported and row count is correct. Assuming data is correct and skipping import.")
 		return
@@ -188,6 +189,7 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("Load time:", time.Since(loadStartTime))
 	fmt.Println("Data length:", len(data))
 
+	// in-memory streaming query api
 	imdbTitleToMap := value.NewToMap[ImdbTitle]().
 		Attr("tconst", func(t ImdbTitle) value.Value { return value.String(t.tconst) }).
 		Attr("titleType", func(t ImdbTitle) value.Value { return value.String(t.titleType) }).
@@ -202,63 +204,46 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 		})
 
 	imdbTitles := value.NewListOfMaps[ImdbTitle](imdbTitleToMap, data)
-
 	parser := value.New()
 
+	fmt.Println("Executing in-memory queries...")
 	executeInMemoryQuery(parser, "count between 2000 and 2005", "imdb.filter(t -> t.startYear >= 2000 & t.startYear <= 2005).size()", "imdb", imdbTitles)
-	executeInMemoryQuery(parser, "average runtime", "imdb.map(t -> t.runtimeMinutes).average()", "imdb", imdbTitles)
-	executeInMemoryQuery(parser, "count containing \"You\" in primaryTitle", "imdb.filter(t -> t.primaryTitle.contains(\"You\")).size()", "imdb", imdbTitles)
-	executeInMemoryQuery(parser, "count of entries with three genres", "imdb.filter(t -> t.genres.size() = 3).size()", "imdb", imdbTitles)
-	executeInMemoryQuery(parser, "count of entries with genre Animation and Fantasy", "imdb.filter(t -> t.genres.contains(\"Animation\") & t.genres.contains(\"Fantasy\")).size()", "imdb", imdbTitles)
+	// executeInMemoryQuery(parser, "average runtime", "imdb.map(t -> t.runtimeMinutes).average()", "imdb", imdbTitles)
+	// executeInMemoryQuery(parser, "count containing \"You\" in primaryTitle", "imdb.filter(t -> t.primaryTitle.contains(\"You\")).size()", "imdb", imdbTitles)
+	// executeInMemoryQuery(parser, "count of entries with three genres", "imdb.filter(t -> t.genres.size() = 3).size()", "imdb", imdbTitles)
+	// executeInMemoryQuery(parser, "count of entries with genre Animation and Fantasy", "imdb.filter(t -> t.genres.contains(\"Animation\") & t.genres.contains(\"Fantasy\")).size()", "imdb", imdbTitles)
 
-	// Import data into SQLite
+	// SQLite
 	fmt.Println("Importing data into in-memory sqlite...")
 	importStartTime := time.Now()
-	importImdbIntoSqlDB(sqliteConn, data)
+	importImdbIntoSqlDb(sqliteConn, data)
 	fmt.Println("In-memory sqlite import done in", time.Since(importStartTime))
 
-	// Count entries in SQLite table
-	r, err := sqliteConn.Query("SELECT COUNT(*) FROM imdb")
-	if err != nil {
-		log.Fatalln("Failed to count entries in sqlite database:", err)
-	}
+	fmt.Println("Executing SQL queries in-memory sqlite...")
+	executeSqlQuery(sqliteConn, "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
+	executeSqlQuery(sqliteConn, "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
+	executeSqlQuery(sqliteConn, "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
+	executeSqlQuery(sqliteConn, "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
+	executeSqlQuery(sqliteConn, "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
 
-	var count int
-	r.Next()
-	r.Scan(&count)
-	fmt.Println("Count of entries in sqlite database:", count)
-
-	// Same for mariadb
+	// MariaDB
 	fmt.Println("Importing data into mariadb...")
 	importStartTime = time.Now()
-	importImdbIntoSqlDB(mariaDbConn, data)
+	importImdbIntoSqlDb(mariaDbConn, data)
 	fmt.Println("MariaDB import done in", time.Since(importStartTime))
 
-	r, err = mariaDbConn.Query("SELECT COUNT(*) FROM imdb")
-	if err != nil {
-		log.Fatalln("Failed to count entries in mariadb database:", err)
-	}
+	fmt.Println("Executing SQL queries mariadb...")
+	executeSqlQuery(mariaDbConn, "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
+	executeSqlQuery(mariaDbConn, "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
+	executeSqlQuery(mariaDbConn, "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
+	executeSqlQuery(mariaDbConn, "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
+	executeSqlQuery(mariaDbConn, "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
 
-	r.Next()
-	r.Scan(&count)
-	fmt.Println("Count of entries in mariadb database:", count)
-
-	// Import data into MongoDB
+	// MongoDB
 	fmt.Println("Importing data into MongoDB...")
 	importStartTime = time.Now()
-	mongoDbCollection.Drop(context.Background())
-
-	interfaceData := make([]interface{}, 0, len(data))
-	for _, entry := range data {
-		interfaceData = append(interfaceData, entry)
-	}
-
-	ordered := false
-	_, err = mongoDbCollection.InsertMany(context.Background(), interfaceData, &options.InsertManyOptions{
-		Ordered: &ordered,
-	})
-	if err != nil {
-		log.Fatalln("Failed to insert data into MongoDB:", err)
-	}
+	importImdbIntoMongoDb(mongoDbCollection, data)
 	fmt.Println("MongoDB import done in", time.Since(importStartTime))
+
+	// TODO: mongodb queries
 }

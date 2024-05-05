@@ -8,7 +8,7 @@ import (
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/hneemann/parser2/cmd/benchmark"
+	"github.com/hneemann/parser2/cmd/listbench"
 	_ "github.com/mattn/go-sqlite3"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -53,7 +53,7 @@ func main() {
 	bench := os.Args[1]
 	switch bench {
 	case "imdb":
-		benchmark.RunImdbBenchmarks(sqliteConn, mariadbConn, mongoDbCollection)
+		listbench.RunImdbBenchmarks(sqliteConn, mariadbConn, mongoDbCollection)
 	default:
 		fmt.Println("Unknown benchmark")
 		os.Exit(1)
