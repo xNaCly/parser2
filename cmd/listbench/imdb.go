@@ -23,15 +23,15 @@ const ImdbFilePath = "title.basics.tsv.gz"
 const ImdbDownloadUrl = "https://datasets.imdbws.com/title.basics.tsv.gz"
 
 type ImdbTitle struct {
-	tconst         string
-	titleType      string
-	primaryTitle   string
-	originalTitle  string
-	isAdult        bool
-	startYear      int32
-	endYear        int32
-	runtimeMinutes int32
-	genres         []string
+	TConst         string   `bson:"tconst"`
+	TitleType      string   `bson:"titleType"`
+	PrimaryTitle   string   `bson:"primaryTitle"`
+	OriginalTitle  string   `bson:"originalTitle"`
+	IsAdult        bool     `bson:"isAdult"`
+	StartYear      int32    `bson:"startYear"`
+	EndYear        int32    `bson:"endYear"`
+	RuntimeMinutes int32    `bson:"runtimeMinutes"`
+	Genres         []string `bson:"genres"`
 }
 
 func ImdbTitleFromCsvRecord(rec []string) ImdbTitle {
@@ -51,15 +51,15 @@ func ImdbTitleFromCsvRecord(rec []string) ImdbTitle {
 	}
 
 	return ImdbTitle{
-		tconst:         rec[0],
-		titleType:      rec[1],
-		primaryTitle:   rec[2],
-		originalTitle:  rec[3],
-		isAdult:        rec[4] == "1",
-		startYear:      int32(startYear),
-		endYear:        int32(endYear),
-		runtimeMinutes: int32(runtimeMinutes),
-		genres:         genres,
+		TConst:         rec[0],
+		TitleType:      rec[1],
+		PrimaryTitle:   rec[2],
+		OriginalTitle:  rec[3],
+		IsAdult:        rec[4] == "1",
+		StartYear:      int32(startYear),
+		EndYear:        int32(endYear),
+		RuntimeMinutes: int32(runtimeMinutes),
+		Genres:         genres,
 	}
 }
 
@@ -82,11 +82,18 @@ func loadImdbData() ([]ImdbTitle, error) {
 	csvReader.Comma = '\t' // CSV
 
 	entries := []ImdbTitle{}
+	isHeader := true
 
 	for {
 		record, err := csvReader.Read()
 		if err == io.EOF {
 			break
+		}
+
+		if isHeader {
+			// First row is header, skip it
+			isHeader = false
+			continue
 		}
 
 		if err == nil {
@@ -142,7 +149,7 @@ func importImdbIntoSqlDb(conn *sql.DB, imdbTitles []ImdbTitle) {
 			fmt.Print("\rImporting ", i, " / ", len(imdbTitles))
 		}
 
-		_, err = stmt.Exec(title.tconst, title.titleType, title.primaryTitle, title.originalTitle, title.isAdult, title.startYear, title.endYear, title.runtimeMinutes, strings.Join(title.genres, ","))
+		_, err = stmt.Exec(title.TConst, title.TitleType, title.PrimaryTitle, title.OriginalTitle, title.IsAdult, title.StartYear, title.EndYear, title.RuntimeMinutes, strings.Join(title.Genres, ","))
 		if err != nil {
 			log.Fatalln("Failed to insert data into sql database:", err)
 		}
@@ -192,16 +199,16 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 
 	// in-memory streaming query api
 	imdbTitleToMap := value.NewToMap[ImdbTitle]().
-		Attr("tconst", func(t ImdbTitle) value.Value { return value.String(t.tconst) }).
-		Attr("titleType", func(t ImdbTitle) value.Value { return value.String(t.titleType) }).
-		Attr("primaryTitle", func(t ImdbTitle) value.Value { return value.String(t.primaryTitle) }).
-		Attr("originalTitle", func(t ImdbTitle) value.Value { return value.String(t.originalTitle) }).
-		Attr("isAdult", func(t ImdbTitle) value.Value { return value.Bool(t.isAdult) }).
-		Attr("startYear", func(t ImdbTitle) value.Value { return value.Int(t.startYear) }).
-		Attr("endYear", func(t ImdbTitle) value.Value { return value.Int(t.endYear) }).
-		Attr("runtimeMinutes", func(t ImdbTitle) value.Value { return value.Int(t.runtimeMinutes) }).
+		Attr("tconst", func(t ImdbTitle) value.Value { return value.String(t.TConst) }).
+		Attr("titleType", func(t ImdbTitle) value.Value { return value.String(t.TitleType) }).
+		Attr("primaryTitle", func(t ImdbTitle) value.Value { return value.String(t.PrimaryTitle) }).
+		Attr("originalTitle", func(t ImdbTitle) value.Value { return value.String(t.OriginalTitle) }).
+		Attr("isAdult", func(t ImdbTitle) value.Value { return value.Bool(t.IsAdult) }).
+		Attr("startYear", func(t ImdbTitle) value.Value { return value.Int(t.StartYear) }).
+		Attr("endYear", func(t ImdbTitle) value.Value { return value.Int(t.EndYear) }).
+		Attr("runtimeMinutes", func(t ImdbTitle) value.Value { return value.Int(t.RuntimeMinutes) }).
 		Attr("genres", func(t ImdbTitle) value.Value {
-			return value.NewListConvert(func(s string) value.Value { return value.String(s) }, t.genres)
+			return value.NewListConvert(func(s string) value.Value { return value.String(s) }, t.Genres)
 		})
 
 	imdbTitles := value.NewListOfMaps[ImdbTitle](imdbTitleToMap, data)
@@ -247,4 +254,25 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("MongoDB import done in", time.Since(importStartTime))
 
 	// TODO: mongodb queries
+	executeMongoCountQuery("count between 2000 and 2005", mongoDbCollection, bson.D{{"startYear", bson.D{{"$gte", 2000}, {"$lte", 2005}}}})
+	executeMongoQuery("average runtime", func() (float64, error) {
+		avg, err := mongoDbCollection.Aggregate(context.Background(), bson.A{
+			bson.D{{"$group", bson.D{{"_id", nil}, {"avg", bson.D{{"$avg", "$runtimeMinutes"}}}}}},
+		})
+		if err != nil {
+			return 0, err
+		}
+		defer avg.Close(context.Background())
+
+		var result struct {
+			Avg float64 `bson:"avg"`
+		}
+		avg.Next(context.Background())
+		avg.Decode(&result)
+		return result.Avg, nil
+	})
+	executeMongoCountQuery("count containing \"You\" in primaryTitle", mongoDbCollection, bson.D{{"primaryTitle", bson.D{{"$regex", "You"}}}})
+	executeMongoCountQuery("count of entries with three genres", mongoDbCollection, bson.D{{"genres", bson.D{{"$size", 3}}}})
+	executeMongoCountQuery("count of entries with genre Animation and Fantasy", mongoDbCollection, bson.D{{"genres", bson.D{{"$all", bson.A{"Animation", "Fantasy"}}}}})
+
 }

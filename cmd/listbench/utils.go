@@ -2,6 +2,7 @@ package listbench
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hneemann/parser2/value"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func downloadDataset(fileName string, downloadUrl string) string {
@@ -83,4 +85,24 @@ func executeSqlQuery(conn *sql.DB, operationName string, query string) {
 
 	fmt.Println("Result:", res)
 	fmt.Println("Execution time:", time.Since(executionStartTime))
+}
+
+func executeMongoQuery(operationName string, query func() (float64, error)) {
+	fmt.Println("Executing", operationName)
+
+	executionStartTime := time.Now()
+	result, err := query()
+	if err != nil {
+		log.Fatalln("Failed to execute query:", err)
+	}
+
+	fmt.Println("Result:", result)
+	fmt.Println("Execution time:", time.Since(executionStartTime))
+}
+
+func executeMongoCountQuery(operationName string, collection *mongo.Collection, filter interface{}) {
+	executeMongoQuery(operationName, func() (float64, error) {
+		count, err := collection.CountDocuments(context.Background(), filter)
+		return float64(count), err
+	})
 }
