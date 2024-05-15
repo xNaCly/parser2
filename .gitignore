@@ -1,5 +1,6 @@
 /.idea/
 go.work
 go.work.sum
-# Benchmark datasets
+# Benchmark datasets and results
 /data
+/listBenchResults

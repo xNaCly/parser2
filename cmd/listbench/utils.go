@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/hneemann/parser2/value"
@@ -51,6 +52,57 @@ func downloadDataset(fileName string, downloadUrl string) string {
 	return filePath
 }
 
+type benchmarkResults struct {
+	queryId       int
+	databaseName  string
+	executionTime time.Duration
+}
+
+var queryIdCounter = make(map[string]int)
+var benchResults = []benchmarkResults{}
+
+func storeBenchmarkResults(databaseName string, executionTime time.Duration) {
+	queryId := 0
+	if _, ok := queryIdCounter[databaseName]; ok {
+		queryIdCounter[databaseName]++
+		queryId = queryIdCounter[databaseName]
+	} else {
+		queryIdCounter[databaseName] = 0
+	}
+
+	benchResults = append(benchResults, benchmarkResults{
+		queryId:       queryId,
+		databaseName:  databaseName,
+		executionTime: executionTime,
+	})
+}
+
+func exportBenchmarkResults(baseDir string) {
+	if err := os.MkdirAll(baseDir, 0777); err != nil {
+		log.Fatalln("Failed to create csv base directory at", baseDir, ":", err)
+	}
+
+	csvPath := filepath.Join(baseDir, fmt.Sprintf("benchmark-%v.csv", time.Now().Unix()))
+	csvFile, err := os.Create(csvPath)
+	if err != nil {
+		log.Fatalln("Failed to create csv file at", csvPath, ":", err)
+	}
+	defer csvFile.Close()
+
+	// TODO: maybe use encoding/csv for this
+	_, err = csvFile.WriteString("queryId,databaseName,executionTime\n")
+	if err != nil {
+		log.Fatalln("Failed to write csv header:", err)
+	}
+
+	for _, result := range benchResults {
+		_, err = csvFile.WriteString(fmt.Sprintf("%v,%v,%v\n", result.queryId, result.databaseName, float64(result.executionTime.Milliseconds())/1000.0))
+		if err != nil {
+			log.Fatalln("Failed to write csv line:", err)
+		}
+	}
+}
+
 func executeInMemoryQuery(parser *value.FunctionGenerator, operationName string, query string, dataName string, data value.Value) {
 	fu, err := parser.Generate(query, dataName)
 	if err != nil {
@@ -67,9 +119,10 @@ func executeInMemoryQuery(parser *value.FunctionGenerator, operationName string,
 
 	fmt.Println("Result:", result)
 	fmt.Println("Execution time:", time.Since(executionStartTime))
+	storeBenchmarkResults("parser2", time.Since(executionStartTime))
 }
 
-func executeSqlQuery(conn *sql.DB, operationName string, query string) {
+func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query string) {
 	fmt.Println("Executing", operationName+":", "\""+query+"\"")
 
 	executionStartTime := time.Now()
@@ -85,6 +138,7 @@ func executeSqlQuery(conn *sql.DB, operationName string, query string) {
 
 	fmt.Println("Result:", res)
 	fmt.Println("Execution time:", time.Since(executionStartTime))
+	storeBenchmarkResults(dbName, time.Since(executionStartTime))
 }
 
 func executeMongoQuery(operationName string, query func() (float64, error)) {
@@ -98,6 +152,7 @@ func executeMongoQuery(operationName string, query func() (float64, error)) {
 
 	fmt.Println("Result:", result)
 	fmt.Println("Execution time:", time.Since(executionStartTime))
+	storeBenchmarkResults("mongodb", time.Since(executionStartTime))
 }
 
 func executeMongoCountQuery(operationName string, collection *mongo.Collection, filter interface{}) {

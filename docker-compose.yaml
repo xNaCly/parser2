@@ -5,16 +5,19 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: password
       MARIADB_DATABASE: db
+    tmpfs:
+      - /var/lib/mysql
     ports:
       - "3306:3306"
 
   mongo:
     image: mongo:7.0.9-jammy
-
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
+    tmpfs:
+      - /data/db
     ports:
       - "27017:27017"
 

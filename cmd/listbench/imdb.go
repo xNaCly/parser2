@@ -228,11 +228,11 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("In-memory sqlite import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries in-memory sqlite...")
-	executeSqlQuery(sqliteConn, "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
-	executeSqlQuery(sqliteConn, "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
-	executeSqlQuery(sqliteConn, "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
-	executeSqlQuery(sqliteConn, "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
-	executeSqlQuery(sqliteConn, "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
+	executeSqlQuery(sqliteConn, "sqlite", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
+	executeSqlQuery(sqliteConn, "sqlite", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
+	executeSqlQuery(sqliteConn, "sqlite", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
+	executeSqlQuery(sqliteConn, "sqlite", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
+	executeSqlQuery(sqliteConn, "sqlite", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
 
 	// MariaDB
 	fmt.Println("Importing data into mariadb...")
@@ -241,11 +241,11 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("MariaDB import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries mariadb...")
-	executeSqlQuery(mariaDbConn, "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
-	executeSqlQuery(mariaDbConn, "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
-	executeSqlQuery(mariaDbConn, "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
-	executeSqlQuery(mariaDbConn, "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
-	executeSqlQuery(mariaDbConn, "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
+	executeSqlQuery(mariaDbConn, "mariadb", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
+	executeSqlQuery(mariaDbConn, "mariadb", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
+	executeSqlQuery(mariaDbConn, "mariadb", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
+	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
+	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
 
 	// MongoDB
 	fmt.Println("Importing data into MongoDB...")
@@ -275,4 +275,5 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	executeMongoCountQuery("count of entries with three genres", mongoDbCollection, bson.D{{"genres", bson.D{{"$size", 3}}}})
 	executeMongoCountQuery("count of entries with genre Animation and Fantasy", mongoDbCollection, bson.D{{"genres", bson.D{{"$all", bson.A{"Animation", "Fantasy"}}}}})
 
+	exportBenchmarkResults("listBenchResults/imdb")
 }
