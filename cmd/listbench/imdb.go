@@ -217,6 +217,7 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("Executing in-memory queries...")
 	executeInMemoryQuery(parser, "count between 2000 and 2005", "imdb.filter(t -> t.startYear >= 2000 & t.startYear <= 2005).size()", "imdb", imdbTitles)
 	executeInMemoryQuery(parser, "average runtime", "imdb.map(t -> t.runtimeMinutes).average()", "imdb", imdbTitles)
+	executeInMemoryQuery(parser, "average runtime per titleType", "imdb.groupByString(t -> t.titleType).map(v -> {key: v.key, avgRuntime: v.values.map(t -> t.runtimeMinutes).average()}).eval()", "imdb", imdbTitles)
 	executeInMemoryQuery(parser, "count containing \"You\" in primaryTitle", "imdb.filter(t -> t.primaryTitle.contains(\"You\")).size()", "imdb", imdbTitles)
 	executeInMemoryQuery(parser, "count of entries with three genres", "imdb.filter(t -> t.genres.size() = 3).size()", "imdb", imdbTitles)
 	executeInMemoryQuery(parser, "count of entries with genre Animation and Fantasy", "imdb.filter(t -> t.genres.contains(\"Animation\") & t.genres.contains(\"Fantasy\")).size()", "imdb", imdbTitles)
@@ -228,11 +229,12 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("In-memory sqlite import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries in-memory sqlite...")
-	executeSqlQuery(sqliteConn, "sqlite", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
-	executeSqlQuery(sqliteConn, "sqlite", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
-	executeSqlQuery(sqliteConn, "sqlite", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
-	executeSqlQuery(sqliteConn, "sqlite", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
-	executeSqlQuery(sqliteConn, "sqlite", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
+	executeSqlQuery(sqliteConn, "sqlite", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005", true)
+	executeSqlQuery(sqliteConn, "sqlite", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", true)
+	executeSqlQuery(sqliteConn, "sqlite", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", false)
+	executeSqlQuery(sqliteConn, "sqlite", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'", true)
+	executeSqlQuery(sqliteConn, "sqlite", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2", true)
+	executeSqlQuery(sqliteConn, "sqlite", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'", true)
 
 	// MariaDB
 	fmt.Println("Importing data into mariadb...")
@@ -241,11 +243,12 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	fmt.Println("MariaDB import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries mariadb...")
-	executeSqlQuery(mariaDbConn, "mariadb", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005")
-	executeSqlQuery(mariaDbConn, "mariadb", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb")
-	executeSqlQuery(mariaDbConn, "mariadb", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'")
-	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2")
-	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'")
+	executeSqlQuery(mariaDbConn, "mariadb", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005", true)
+	executeSqlQuery(mariaDbConn, "mariadb", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", true)
+	executeSqlQuery(mariaDbConn, "mariadb", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", false)
+	executeSqlQuery(mariaDbConn, "mariadb", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'", true)
+	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2", true)
+	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'", true)
 
 	// MongoDB
 	fmt.Println("Importing data into MongoDB...")
@@ -253,7 +256,6 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 	importImdbIntoMongoDb(mongoDbCollection, data)
 	fmt.Println("MongoDB import done in", time.Since(importStartTime))
 
-	// TODO: mongodb queries
 	executeMongoCountQuery("count between 2000 and 2005", mongoDbCollection, bson.D{{"startYear", bson.D{{"$gte", 2000}, {"$lte", 2005}}}})
 	executeMongoQuery("average runtime", func() (float64, error) {
 		avg, err := mongoDbCollection.Aggregate(context.Background(), bson.A{
@@ -270,6 +272,30 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 		avg.Next(context.Background())
 		avg.Decode(&result)
 		return result.Avg, nil
+	})
+	executeMongoQuery("average runtime per titleType", func() (float64, error) {
+		avg, err := mongoDbCollection.Aggregate(context.Background(), bson.A{
+			bson.D{{"$group", bson.D{{"_id", "$titleType"}, {"avg", bson.D{{"$avg", "$runtimeMinutes"}}}}}},
+		})
+		if err != nil {
+			return 0, err
+		}
+		defer avg.Close(context.Background())
+
+		count, averageRuntimeAcc := 0, 0.0
+		var result struct {
+			Id  string  `bson:"_id"`
+			Avg float64 `bson:"avg"`
+		}
+
+		fmt.Println("Group results:")
+		for avg.Next(context.Background()) {
+			avg.Decode(&result)
+			count++
+			averageRuntimeAcc += result.Avg
+			fmt.Printf("%s: %v\n", result.Id, result.Avg)
+		}
+		return averageRuntimeAcc / float64(count), nil
 	})
 	executeMongoCountQuery("count containing \"You\" in primaryTitle", mongoDbCollection, bson.D{{"primaryTitle", bson.D{{"$regex", "You"}}}})
 	executeMongoCountQuery("count of entries with three genres", mongoDbCollection, bson.D{{"genres", bson.D{{"$size", 3}}}})

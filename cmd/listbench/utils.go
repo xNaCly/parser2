@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hneemann/parser2/funcGen"
 	"github.com/hneemann/parser2/value"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -117,12 +118,29 @@ func executeInMemoryQuery(parser *value.FunctionGenerator, operationName string,
 		log.Fatalln("Failed to call generated function:", err)
 	}
 
-	fmt.Println("Result:", result)
+	if result.GetType() == value.ListTypeId {
+		fmt.Print("Result: [")
+		list, _ := result.ToList()
+		values, err := list.ToSlice(funcGen.Stack[value.Value]{})
+		if err != nil {
+			log.Fatalln("Failed to convert list to slice:", err)
+		}
+		for i, v := range values {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Print(v)
+		}
+
+		fmt.Println("]")
+	} else {
+		fmt.Println("Result:", result)
+	}
 	fmt.Println("Execution time:", time.Since(executionStartTime))
 	storeBenchmarkResults("parser2", time.Since(executionStartTime))
 }
 
-func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query string) {
+func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query string, isSingleOutput bool) {
 	fmt.Println("Executing", operationName+":", "\""+query+"\"")
 
 	executionStartTime := time.Now()
@@ -132,11 +150,21 @@ func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query st
 	}
 	defer result.Close()
 
-	var res float64
-	result.Next()
-	result.Scan(&res)
+	if isSingleOutput {
+		var res float64
+		result.Next()
+		result.Scan(&res)
 
-	fmt.Println("Result:", res)
+		fmt.Println("Result:", res)
+	} else {
+		fmt.Println("Result:")
+		for result.Next() {
+			var key string
+			var value float64
+			result.Scan(&key, &value)
+			fmt.Printf("%s: %v\n", key, value)
+		}
+	}
 	fmt.Println("Execution time:", time.Since(executionStartTime))
 	storeBenchmarkResults(dbName, time.Since(executionStartTime))
 }
