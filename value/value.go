@@ -551,6 +551,18 @@ func (fg *FunctionGenerator) GetMethod(value Value, methodName string) (funcGen.
 	}
 }
 
+func (fg *FunctionGenerator) OptimizePostLetEval(value Value) {
+	// Here we check whether the result of the expresion that will be assigned
+	// to the variable is a list.
+	// If true we evaluated it and store the results in memory.
+	// When operators are called on lists and the result is saved inside a variable
+	// it is very likely to be used again
+	list, ok := value.ToList()
+	if ok {
+		list.Eval(funcGen.Stack[Value]{})
+	}
+}
+
 func (fg *FunctionGenerator) RegisterMethods(id Type, methods MethodMap) *FunctionGenerator {
 	if fg.methods[id] == nil {
 		fg.methods[id] = methods
@@ -666,6 +678,7 @@ func New() *FunctionGenerator {
 		SetMapHandler(f).
 		SetClosureHandler(f).
 		SetMethodHandler(f).
+		SetLetPostOptimizer(f).
 		SetCustomGenerator(f).
 		SetStringConverter(f).
 		SetToBool(func(c Value) (bool, bool) { return c.ToBool() }).

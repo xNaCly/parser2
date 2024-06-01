@@ -61,6 +61,7 @@ func main() {
 	parser := value.New()
 	parser.GetParser().AllowComments()
 	jitEnabled := flag.Bool("jit", false, "enable/disable the just in time compiler")
+	listOptimizationEnabled := flag.Bool("list-optimization", true, "enable/disable list reuse optimization")
 	flag.Parse()
 	if *jitEnabled {
 		log.Println("[JIT] enabled, starting up")
@@ -81,6 +82,10 @@ func main() {
 				return "any"
 			}
 		}
+	}
+
+	if !(*listOptimizationEnabled) {
+		parser.SetLetPostOptimizer(nil)
 	}
 
 	if len(flag.Args()) >= 1 {

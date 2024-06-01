@@ -16,7 +16,7 @@ func mapSlow(n)
     let y = nil;
     ln(e) / (d * 0.5) / atan(d);
 
-let b = list(100000).map(n -> mapSlow(n)).filter(a -> a > 0).skip(100).eval();
+let b = list(100000).map(n -> mapSlow(n)).filter(a -> a > 0).skip(100);
 let m = b.mean();
 let s = b.sum();
 m + s

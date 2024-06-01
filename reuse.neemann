@@ -1,0 +1,6 @@
+let numbers = list(1000)
+               .skip(1) // skip starting zero
+               .map(i -> list(i + 1).skip(1).average() / (i/2));
+let product = numbers.reduce((a, b) -> a * b);
+let sum = numbers.sum();
+product / sum

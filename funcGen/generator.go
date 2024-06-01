@@ -367,6 +367,10 @@ func (mh MethodHandlerFunc[V]) GetMethod(value V, methodName string) (Function[V
 	return mh(value, methodName)
 }
 
+type LetPostOptimizer[V any] interface {
+	OptimizePostLetEval(value V)
+}
+
 // Generator is used to define a customized generation of functions
 type Generator[V any] interface {
 	GenerateCustom(parser2.AST, GeneratorContext, *FunctionGenerator[V]) (ParserFunc[V], error)
@@ -384,25 +388,26 @@ func (c constMap[V]) GetConst(name string) (V, bool) {
 }
 
 type FunctionGenerator[V any] struct {
-	parser          *parser2.Parser[V]
-	operators       []Operator[V]
-	jit             *Jit[V]
-	unary           []UnaryOperator[V]
-	numberParser    parser2.NumberParser[V]
-	stringHandler   parser2.StringConverter[V]
-	listHandler     ListHandler[V]
-	mapHandler      MapHandler[V]
-	closureHandler  ClosureHandler[V]
-	methodHandler   MethodHandler[V]
-	optimizer       parser2.Optimizer
-	constants       constMap[V]
-	toBool          ToBool[V]
-	isEqual         BoolFunc[V]
-	staticFunctions map[string]Function[V]
-	opMap           map[string]Operator[V]
-	uMap            map[string]UnaryOperator[V]
-	customGenerator Generator[V]
-	finalizer       func(g *FunctionGenerator[V])
+	parser           *parser2.Parser[V]
+	operators        []Operator[V]
+	jit              *Jit[V]
+	unary            []UnaryOperator[V]
+	numberParser     parser2.NumberParser[V]
+	stringHandler    parser2.StringConverter[V]
+	listHandler      ListHandler[V]
+	mapHandler       MapHandler[V]
+	closureHandler   ClosureHandler[V]
+	methodHandler    MethodHandler[V]
+	letPostOptimizer LetPostOptimizer[V]
+	optimizer        parser2.Optimizer
+	constants        constMap[V]
+	toBool           ToBool[V]
+	isEqual          BoolFunc[V]
+	staticFunctions  map[string]Function[V]
+	opMap            map[string]Operator[V]
+	uMap             map[string]UnaryOperator[V]
+	customGenerator  Generator[V]
+	finalizer        func(g *FunctionGenerator[V])
 }
 
 // New creates a new FunctionGenerator
@@ -470,6 +475,11 @@ func (g *FunctionGenerator[V]) SetMapHandler(mapHandler MapHandler[V]) *Function
 
 func (g *FunctionGenerator[V]) SetMethodHandler(methodHandler MethodHandler[V]) *FunctionGenerator[V] {
 	g.methodHandler = methodHandler
+	return g
+}
+
+func (g *FunctionGenerator[V]) SetLetPostOptimizer(letPostOptimizer LetPostOptimizer[V]) *FunctionGenerator[V] {
+	g.letPostOptimizer = letPostOptimizer
 	return g
 }
 
@@ -827,6 +837,11 @@ func (g *FunctionGenerator[V]) GenerateFunc(ast parser2.AST, gc GeneratorContext
 			if err != nil {
 				return zero, a.EnhanceErrorf(err, "error in let")
 			}
+
+			if g.letPostOptimizer != nil {
+				g.letPostOptimizer.OptimizePostLetEval(va)
+			}
+
 			st.Push(va)
 			return mainFunc(st, cs)
 		}, nil
