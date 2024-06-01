@@ -15,8 +15,12 @@ import (
 )
 
 // JIT_CONSTANT sets the threshold the function invocation meta tracing counter
-// has to pass for the function to be considered hot and thus compilable
-var JIT_CONSTANT int = 1_000
+// has to pass for the function to be considered hot and thus compilable. The value
+// was determined by benchmarks concluded in "Comparing a Tree-walk Interpreter
+// with JIT compilation and embedding via Go-plugins" [1]:
+//
+// [1]: https://github.com/xNaCly/treewalk-vs-jit-with-go-plugins
+var JIT_CONSTANT int = 10_000
 
 type stackStorage[V any] struct {
 	data []V
