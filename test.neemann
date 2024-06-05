@@ -10,7 +10,7 @@ func mapSlow(n)
     let b = n*n;
     let c = a + b + n;
     let d = c - 0.01;
-    let e = d*d;
+    let e = if d < 0 then d*d else -d*d;
     let z = e.string();
     let x = list(2000).map(n -> n*n).eval();
     let y = nil;
