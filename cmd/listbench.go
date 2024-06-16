@@ -17,7 +17,7 @@ import (
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Println("Usage: benchmark <bench>")
-		fmt.Println("Available benchmarks: imdb")
+		fmt.Println("Available benchmarks: imdb, ampds2")
 		os.Exit(1)
 	}
 
@@ -54,6 +54,8 @@ func main() {
 	switch bench {
 	case "imdb":
 		listbench.RunImdbBenchmarks(sqliteConn, mariadbConn, mongoDbCollection)
+	case "ampds2":
+		listbench.RunAMPds2Benchmarks(sqliteConn, mariadbConn, mongoDbCollection)
 	default:
 		fmt.Println("Unknown benchmark")
 		os.Exit(1)

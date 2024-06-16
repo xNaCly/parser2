@@ -18,6 +18,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+const DataBaseDir = "data/"
+const BenchmarkResultDir = "listBenchResults/"
+
 func downloadDataset(fileName string, downloadUrl string) string {
 	filePath := path.Join(DataBaseDir, fileName)
 
@@ -78,12 +81,14 @@ func storeBenchmarkResults(databaseName string, executionTime time.Duration) {
 	})
 }
 
-func exportBenchmarkResults(baseDir string) {
-	if err := os.MkdirAll(baseDir, 0777); err != nil {
-		log.Fatalln("Failed to create csv base directory at", baseDir, ":", err)
+func exportBenchmarkResults(benchmarkName string) {
+	benchmarkDir := path.Join(BenchmarkResultDir, benchmarkName)
+
+	if err := os.MkdirAll(benchmarkDir, 0777); err != nil {
+		log.Fatalln("Failed to create csv base directory at", benchmarkDir, ":", err)
 	}
 
-	csvPath := filepath.Join(baseDir, fmt.Sprintf("benchmark-%v.csv", time.Now().Unix()))
+	csvPath := filepath.Join(benchmarkDir, fmt.Sprintf("benchmark-%v.csv", time.Now().Unix()))
 	csvFile, err := os.Create(csvPath)
 	if err != nil {
 		log.Fatalln("Failed to create csv file at", csvPath, ":", err)
@@ -140,7 +145,7 @@ func executeInMemoryQuery(parser *value.FunctionGenerator, operationName string,
 	storeBenchmarkResults("parser2", time.Since(executionStartTime))
 }
 
-func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query string, isSingleOutput bool) {
+func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query string, outputType string) {
 	fmt.Println("Executing", operationName+":", "\""+query+"\"")
 
 	executionStartTime := time.Now()
@@ -150,13 +155,13 @@ func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query st
 	}
 	defer result.Close()
 
-	if isSingleOutput {
+	if outputType == "single" {
 		var res float64
 		result.Next()
 		result.Scan(&res)
 
 		fmt.Println("Result:", res)
-	} else {
+	} else if outputType == "map" {
 		fmt.Println("Result:")
 		for result.Next() {
 			var key string
@@ -164,12 +169,22 @@ func executeSqlQuery(conn *sql.DB, dbName string, operationName string, query st
 			result.Scan(&key, &value)
 			fmt.Printf("%s: %v\n", key, value)
 		}
+	} else if outputType == "list" {
+		fmt.Println("Result:")
+		for result.Next() {
+			var value float64
+			result.Scan(&value)
+			fmt.Printf("%v\n", value)
+		}
+	} else {
+		panic("Unknown output type " + outputType)
 	}
+
 	fmt.Println("Execution time:", time.Since(executionStartTime))
 	storeBenchmarkResults(dbName, time.Since(executionStartTime))
 }
 
-func executeMongoQuery(operationName string, query func() (float64, error)) {
+func executeMongoQuery[T any](operationName string, query func() (T, error)) {
 	fmt.Println("Executing", operationName)
 
 	executionStartTime := time.Now()
