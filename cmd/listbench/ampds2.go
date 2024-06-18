@@ -197,7 +197,7 @@ func RunAMPds2Benchmarks(sqliteConn, mariadbConn *sql.DB, mongoDbCollection *mon
 	parser := value.New()
 
 	fmt.Println("Executing in-memory queries...")
-	executeInMemoryQuery(parser, "average power usage per day", `ampds2.map(d -> d.power).average()`, "ampds2", ampds2Maps)
+	executeInMemoryQuery(parser, "average power usage", `ampds2.map(d -> d.power).average()`, "ampds2", ampds2Maps)
 	executeInMemoryQuery(parser, "average power usage per day", `ampds2.groupByInt(d -> d.timestamp / 86400 / 1e9).map(g -> g.values.map(d -> d.power).average())`, "ampds2", ampds2Maps)
 	executeInMemoryQuery(parser, "voltage difference per day sorted descending", `ampds2.groupByInt(d -> d.timestamp / 86400 / 1e9).map(g -> let m = g.values.minMax(d -> d.voltage); m.max - m.min).orderRev(d -> d)`, "ampds2", ampds2Maps)
 	executeInMemoryQuery(parser, "count of days with momentary frequency derivation exceeding one hertz", `ampds2.groupByInt(d -> d.timestamp / 86400 / 1e9).filter(g -> let m = g.values.minMax(d -> d.frequency); (m.max - m.min > 1.0)).size()`, "ampds2", ampds2Maps)
@@ -210,7 +210,7 @@ func RunAMPds2Benchmarks(sqliteConn, mariadbConn *sql.DB, mongoDbCollection *mon
 	fmt.Println("In-memory sqlite import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries with in-memory sqlite...")
-	executeSqlQuery(sqliteConn, "sqlite", "average power usage per day", "SELECT AVG(power) FROM ampds2", "single")
+	executeSqlQuery(sqliteConn, "sqlite", "average power usage", "SELECT AVG(power) FROM ampds2", "single")
 	executeSqlQuery(sqliteConn, "sqlite", "average power usage per day", "SELECT AVG(power) FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT)", "list")
 	executeSqlQuery(sqliteConn, "sqlite", "voltage difference per day sorted descending", "SELECT MAX(voltage) - MIN(voltage) as diff FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT) ORDER BY diff DESC", "list")
 	executeSqlQuery(sqliteConn, "sqlite", "count of days with momentary frequency derivation exceeding one hertz", "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT) HAVING MAX(frequency) - MIN(frequency) > 1.0) as subquery", "single")
@@ -223,7 +223,7 @@ func RunAMPds2Benchmarks(sqliteConn, mariadbConn *sql.DB, mongoDbCollection *mon
 	fmt.Println("MariaDB import done in", time.Since(importStartTime))
 
 	fmt.Println("Executing SQL queries with MariaDB...")
-	executeSqlQuery(mariadbConn, "mariadb", "average power usage per day", "SELECT AVG(power) FROM ampds2", "single")
+	executeSqlQuery(mariadbConn, "mariadb", "average power usage", "SELECT AVG(power) FROM ampds2", "single")
 	executeSqlQuery(mariadbConn, "mariadb", "average power usage per day", "SELECT AVG(power) FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT)", "list")
 	executeSqlQuery(mariadbConn, "mariadb", "voltage difference per day sorted descending", "SELECT MAX(voltage) - MIN(voltage) as diff FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT) ORDER BY diff DESC", "list")
 	executeSqlQuery(mariadbConn, "mariadb", "count of days with momentary frequency derivation exceeding one hertz", "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM ampds2 GROUP BY CAST(timestamp / 86400 / 1e9 as INT) HAVING MAX(frequency) - MIN(frequency) > 1.0) as subquery", "single")
@@ -237,7 +237,7 @@ func RunAMPds2Benchmarks(sqliteConn, mariadbConn *sql.DB, mongoDbCollection *mon
 
 	fmt.Println("Executing MongoDB queries...")
 
-	executeMongoQuery("average power usage per day", func() (float64, error) {
+	executeMongoQuery("average power usage", func() (float64, error) {
 		avg, err := mongoDbCollection.Aggregate(context.Background(), bson.A{
 			bson.D{{"$group", bson.D{{"_id", nil}, {"avg", bson.D{{"$avg", "$power"}}}}}},
 		})
