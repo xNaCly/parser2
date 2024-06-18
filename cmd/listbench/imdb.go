@@ -229,8 +229,8 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 
 	fmt.Println("Executing SQL queries with in-memory sqlite...")
 	executeSqlQuery(sqliteConn, "sqlite", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005", "single")
-	executeSqlQuery(sqliteConn, "sqlite", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", "map")
-	executeSqlQuery(sqliteConn, "sqlite", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", "single")
+	executeSqlQuery(sqliteConn, "sqlite", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", "single")
+	executeSqlQuery(sqliteConn, "sqlite", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", "map")
 	executeSqlQuery(sqliteConn, "sqlite", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'", "single")
 	executeSqlQuery(sqliteConn, "sqlite", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2", "single")
 	executeSqlQuery(sqliteConn, "sqlite", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'", "single")
@@ -243,8 +243,8 @@ func RunImdbBenchmarks(sqliteConn *sql.DB, mariaDbConn *sql.DB, mongoDbCollectio
 
 	fmt.Println("Executing SQL queries with MariaDB...")
 	executeSqlQuery(mariaDbConn, "mariadb", "count between 2000 and 2005", "SELECT COUNT(*) FROM imdb WHERE startYear >= 2000 AND startYear <= 2005", "single")
-	executeSqlQuery(mariaDbConn, "mariadb", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", "map")
-	executeSqlQuery(mariaDbConn, "mariadb", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", "single")
+	executeSqlQuery(mariaDbConn, "mariadb", "average runtime", "SELECT AVG(runtimeMinutes) FROM imdb", "single")
+	executeSqlQuery(mariaDbConn, "mariadb", "average runtime per titleType", "SELECT titleType, AVG(runtimeMinutes) FROM imdb GROUP BY titleType", "map")
 	executeSqlQuery(mariaDbConn, "mariadb", "count containing \"You\" in primaryTitle", "SELECT COUNT(*) FROM imdb WHERE primaryTitle LIKE '%You%'", "single")
 	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with three genres", "SELECT COUNT(*) FROM imdb WHERE LENGTH(genres) - LENGTH(REPLACE(genres, ',', '')) = 2", "single")
 	executeSqlQuery(mariaDbConn, "mariadb", "count of entries with genre Animation and Fantasy", "SELECT COUNT(*) FROM imdb WHERE genres LIKE '%Animation%' AND genres LIKE '%Fantasy%'", "single")
